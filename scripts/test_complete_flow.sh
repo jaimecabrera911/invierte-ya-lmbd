@@ -19,17 +19,38 @@ make_request() {
     local endpoint=$2
     local data=$3
     local description=$4
+    local token=$5
     
     echo "📡 $description..."
     
-    if [ -n "$data" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X $method \
-            -H "Content-Type: application/json" \
-            -d "$data" \
-            "$API_URL$endpoint")
+    if [ -n "$token" ]; then
+        auth_header="-H \"Authorization: Bearer $token\""
     else
-        response=$(curl -s -w "\n%{http_code}" -X $method \
-            "$API_URL$endpoint")
+        auth_header=""
+    fi
+    
+    if [ -n "$data" ]; then
+        if [ -n "$token" ]; then
+            response=$(curl -s -w "\n%{http_code}" -X $method \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $token" \
+                -d "$data" \
+                "$API_URL$endpoint")
+        else
+            response=$(curl -s -w "\n%{http_code}" -X $method \
+                -H "Content-Type: application/json" \
+                -d "$data" \
+                "$API_URL$endpoint")
+        fi
+    else
+        if [ -n "$token" ]; then
+            response=$(curl -s -w "\n%{http_code}" -X $method \
+                -H "Authorization: Bearer $token" \
+                "$API_URL$endpoint")
+        else
+            response=$(curl -s -w "\n%{http_code}" -X $method \
+                "$API_URL$endpoint")
+        fi
     fi
     
     # Separar respuesta y código de estado
@@ -53,6 +74,33 @@ make_request() {
     fi
 }
 
+# Función para hacer login y obtener token
+login_user() {
+    local email=$1
+    local password=$2
+    
+    login_data='{
+        "email": "'$email'",
+        "password": "'$password'"
+    }'
+    
+    response=$(curl -s -w "\n%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$login_data" \
+        "$API_URL/auth/login")
+    
+    body=$(echo "$response" | sed '$d')
+    status_code=$(echo "$response" | tail -n 1)
+    
+    if [[ $status_code -ge 200 && $status_code -lt 300 ]]; then
+        # Extraer el token del JSON response
+        token=$(echo "$body" | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null)
+        echo "$token"
+    else
+        echo ""
+    fi
+}
+
 # Función para crear usuario y suscribir a fondo
 test_fund_subscription() {
     local user_id=$1
@@ -70,30 +118,40 @@ test_fund_subscription() {
     
     # Crear usuario
     user_data='{
-        "user_id": "'$user_id'",
         "email": "'$user_id'@example.com",
         "phone": "+57300123456'$counter'",
+        "password": "password123",
         "notification_preference": "email"
     }'
     
-    make_request "POST" "/users" "$user_data" "Creación de usuario $user_id" || {
+    make_request "POST" "/auth/register" "$user_data" "Creación de usuario $user_id" || {
         echo "⚠️ Usuario ya existe, continuando..."
     }
     
+    # Hacer login para obtener token
+    echo "🔐 Haciendo login para $user_id..."
+    token=$(login_user "$user_id@example.com" "password123")
+    
+    if [ -z "$token" ]; then
+        echo "❌ Error al hacer login para $user_id"
+        return 1
+    fi
+    
+    echo "✅ Login exitoso para $user_id"
+    
     # Realizar suscripción
     subscription_data='{
-        "user_id": "'$user_id'",
         "fund_id": "'$fund_id'",
         "amount": '$amount'
     }'
     
-    make_request "POST" "/funds/subscribe" "$subscription_data" "Suscripción de $user_id al fondo $fund_name"
+    make_request "POST" "/funds/subscribe" "$subscription_data" "Suscripción de $user_id al fondo $fund_name" "$token"
     
     # Verificar suscripción
-    make_request "GET" "/users/$user_id/subscriptions" "" "Verificación de suscripciones de $user_id"
+    make_request "GET" "/users/me/subscriptions" "" "Verificación de suscripciones de $user_id" "$token"
     
     # Verificar balance actualizado
-    make_request "GET" "/users/$user_id" "" "Verificación de balance de $user_id"
+    make_request "GET" "/users/me" "" "Verificación de balance de $user_id" "$token"
 }
 
 # Paso 1: Verificar API
@@ -130,11 +188,19 @@ echo
 echo "5️⃣ Resumen final del sistema"
 echo "============================="
 
-# Listar todos los usuarios
-echo "👥 Verificando todos los usuarios creados:"
-for user in "user_fpv_recaudadora" "user_fpv_ecopetrol" "user_deudaprivada" "user_fdo_acciones" "user_fpv_dinamica"; do
-    make_request "GET" "/users/$user" "" "Estado final de $user"
-done
+# Verificación final con autenticación
+echo "👥 Verificación final de usuario autenticado:"
+echo "🔐 Haciendo login con el primer usuario creado..."
+final_token=$(login_user "user_fpv_recaudadora@example.com" "password123")
+
+if [ -n "$final_token" ]; then
+    echo "✅ Login exitoso para verificación final"
+    make_request "GET" "/users/me" "" "Estado final del usuario autenticado" "$final_token"
+    make_request "GET" "/users/me/subscriptions" "" "Suscripciones del usuario autenticado" "$final_token"
+    make_request "GET" "/users/me/transactions" "" "Transacciones del usuario autenticado" "$final_token"
+else
+    echo "❌ Error en login para verificación final"
+fi
 
 # Verificar fondos finales
 echo "📊 Estado final de los fondos:"
