@@ -7,6 +7,7 @@ Esta carpeta contiene la documentación completa de la API del sistema de fondos
 ### 🔧 `swagger.yaml`
 Especificación OpenAPI 3.0.3 completa de la API que incluye:
 - Definición de todos los endpoints
+- **Sistema de autenticación JWT Bearer**
 - Esquemas de datos (request/response)
 - Ejemplos de uso
 - Códigos de error
@@ -67,27 +68,33 @@ swagger-codegen generate -i docs/swagger.json -l python -o ./client
 swagger-codegen generate -i docs/swagger.json -l javascript -o ./js-client
 ```
 
-## 🏗️ Estructura de la API
+## 🎯 Endpoints Disponibles
 
-### 🏥 Health & Status
-- `GET /` - Endpoint raíz con información básica
+### 🏥 Salud & Estado
+- `GET /` - Información básica de la API
 - `GET /health` - Verificación de salud del sistema
 
+### 🔐 Autenticación
+- `POST /auth/register` - Registrar nuevo usuario y obtener token JWT
+- `POST /auth/login` - Iniciar sesión y obtener token JWT
+
 ### 👥 Gestión de Usuarios
-- `POST /users` - Crear nuevo usuario (balance inicial: COP $500,000)
-- `GET /users/{user_id}` - Obtener información de usuario
+- `POST /users` - Crear nuevo usuario (legacy, usar /auth/register)
+- `GET /users/{user_id}` - Obtener información de usuario 🔒
 
 ### 💰 Fondos de Inversión
 - `GET /funds` - Listar todos los fondos disponibles
-- `POST /funds/subscribe` - Suscribirse a un fondo
-- `POST /funds/cancel` - Cancelar suscripción a un fondo
+- `POST /funds/subscribe` - Suscribirse a un fondo 🔒
+- `POST /funds/cancel` - Cancelar suscripción a un fondo 🔒
 
 ### 📊 Transacciones & Suscripciones
-- `GET /users/{user_id}/transactions` - Historial de transacciones
-- `GET /users/{user_id}/subscriptions` - Suscripciones activas
+- `GET /users/{user_id}/transactions` - Historial de transacciones 🔒
+- `GET /users/{user_id}/subscriptions` - Suscripciones activas 🔒
 
 ### ⚙️ Administración
 - `POST /init-funds` - Inicializar fondos predefinidos (desarrollo)
+
+> 🔒 = Requiere autenticación JWT Bearer token
 
 ## 💼 Fondos Disponibles
 
@@ -119,7 +126,39 @@ http://localhost:3000
 
 La documentación Swagger incluye ejemplos completos para todos los endpoints. Aquí algunos casos principales:
 
-### Crear Usuario
+### 🔐 Autenticación
+
+#### Registrar Usuario
+```bash
+curl -X POST "https://jwnazw2b41.execute-api.us-east-1.amazonaws.com/Prod/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "juan_perez_123",
+    "email": "juan.perez@email.com",
+    "phone": "+573001234567",
+    "password": "password123",
+    "notification_preference": "EMAIL"
+  }'
+```
+
+#### Iniciar Sesión
+```bash
+curl -X POST "https://jwnazw2b41.execute-api.us-east-1.amazonaws.com/Prod/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "juan_perez_123",
+    "password": "password123"
+  }'
+```
+
+### Usar Token JWT
+Para endpoints protegidos, incluye el token en el header:
+```bash
+curl -X GET "https://jwnazw2b41.execute-api.us-east-1.amazonaws.com/Prod/users/juan_perez_123" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+### Crear Usuario (Legacy)
 ```bash
 curl -X POST "https://jwnazw2b41.execute-api.us-east-1.amazonaws.com/Prod/users" \
   -H "Content-Type: application/json" \

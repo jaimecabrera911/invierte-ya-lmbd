@@ -24,14 +24,18 @@
     }
   ],
   "tags": [
-    {
-      "name": "Health",
-      "description": "Endpoints de salud y estado del sistema"
-    },
-    {
-      "name": "Users",
-      "description": "Gestión de usuarios"
-    },
+      {
+        "name": "Health",
+        "description": "Endpoints de salud y estado del sistema"
+      },
+      {
+        "name": "Authentication",
+        "description": "Autenticación y autorización de usuarios"
+      },
+      {
+        "name": "Users",
+        "description": "Gestión de usuarios"
+      },
     {
       "name": "Funds",
       "description": "Gestión de fondos de inversión"

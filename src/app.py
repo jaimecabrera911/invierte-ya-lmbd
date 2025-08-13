@@ -1,13 +1,20 @@
 import os
 import boto3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from mangum import Mangum
 from pydantic import BaseModel
 from typing import Optional, List
 from enum import Enum
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
 
 app = FastAPI(
     title="Invierte Ya - Sistema de Fondos API",
@@ -27,6 +34,17 @@ notifications_table = dynamodb.Table(
 
 # Constantes
 INITIAL_BALANCE = Decimal('500000')  # COP $500.000
+
+# Configuración de autenticación
+SECRET_KEY = os.environ.get(
+    'JWT_SECRET_KEY', 'your-secret-key-change-in-production'
+)
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Configuración de hash de contraseñas
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
 
 
 class FundCategory(str, Enum):
@@ -59,9 +77,24 @@ class UserCreate(BaseModel):
     user_id: str
     email: str
     phone: str
+    password: str
     notification_preference: NotificationType = (
         NotificationType.EMAIL
     )
+
+
+class UserLogin(BaseModel):
+    user_id: str
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    user_id: Optional[str] = None
 
 
 class User(BaseModel):
@@ -115,6 +148,54 @@ class CancellationRequest(BaseModel):
     fund_id: str
 
 
+# Funciones de utilidad para autenticación
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+        token_data = TokenData(user_id=user_id)
+    except JWTError:
+        raise credentials_exception
+    
+    # Verificar que el usuario existe en la base de datos
+    try:
+        response = users_table.get_item(Key={'user_id': token_data.user_id})
+        if 'Item' not in response:
+            raise credentials_exception
+        return response['Item']['user_id']
+    except Exception:
+        raise credentials_exception
+
+
 @app.get("/")
 def read_root():
     return {
@@ -156,6 +237,97 @@ def health_check():
     return health_status
 
 
+@app.post("/auth/register", response_model=Token)
+def register_user(user_data: UserCreate):
+    """Registrar un nuevo usuario y retornar token de acceso"""
+    try:
+        # Verificar si el usuario ya existe
+        response = users_table.get_item(Key={'user_id': user_data.user_id})
+        if 'Item' in response:
+            raise HTTPException(
+                status_code=409,
+                detail="User already exists"
+            )
+        
+        # Hash de la contraseña
+        hashed_password = get_password_hash(user_data.password)
+        
+        # Crear usuario en la base de datos
+        timestamp = datetime.utcnow().isoformat()
+        user_item = {
+            'user_id': user_data.user_id,
+            'balance': INITIAL_BALANCE,
+            'email': user_data.email,
+            'phone': user_data.phone,
+            'password_hash': hashed_password,
+            'notification_preference': user_data.notification_preference.value,
+            'created_at': timestamp,
+            'updated_at': timestamp
+        }
+        
+        users_table.put_item(Item=user_item)
+        
+        # Crear token de acceso
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user_data.user_id}, expires_delta=access_token_expires
+        )
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creating user: {str(e)}"
+        )
+
+
+@app.post("/auth/login", response_model=Token)
+def login_user(user_credentials: UserLogin):
+    """Autenticar usuario y retornar token de acceso"""
+    try:
+        # Buscar usuario en la base de datos
+        response = users_table.get_item(Key={'user_id': user_credentials.user_id})
+        if 'Item' not in response:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid credentials"
+            )
+        
+        user = response['Item']
+        
+        # Verificar contraseña
+        if not verify_password(user_credentials.password, user['password_hash']):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid credentials"
+            )
+        
+        # Crear token de acceso
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user_credentials.user_id}, expires_delta=access_token_expires
+        )
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error during login: {str(e)}"
+        )
+
+
 @app.post("/users", response_model=User)
 def create_user(user_data: UserCreate):
     """Crear un nuevo usuario con saldo inicial"""
@@ -186,9 +358,16 @@ def create_user(user_data: UserCreate):
 
 
 @app.get("/users/{user_id}", response_model=User)
-def get_user(user_id: str):
+def get_user(user_id: str, current_user: str = Depends(get_current_user)):
     """Obtener información de un usuario"""
     try:
+        # Verificar autorización: el usuario solo puede ver su propia información
+        if user_id != current_user:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to view this user's information"
+            )
+        
         response = users_table.get_item(Key={'user_id': user_id})
         
         if 'Item' not in response:
@@ -228,9 +407,19 @@ def get_funds():
 
 
 @app.post("/funds/subscribe")
-def subscribe_to_fund(subscription: SubscriptionRequest):
+def subscribe_to_fund(
+    subscription: SubscriptionRequest,
+    current_user: str = Depends(get_current_user)
+):
     """Suscribirse a un fondo"""
     try:
+        # Verificar autorización: el usuario solo puede suscribirse a sí mismo
+        if subscription.user_id != current_user:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to subscribe for this user"
+            )
+        
         # Obtener información del usuario
         user_response = users_table.get_item(
             Key={'user_id': subscription.user_id}
@@ -371,9 +560,19 @@ def subscribe_to_fund(subscription: SubscriptionRequest):
 
 
 @app.post("/funds/cancel")
-def cancel_fund_subscription(cancellation: CancellationRequest):
+def cancel_fund_subscription(
+    cancellation: CancellationRequest,
+    current_user: str = Depends(get_current_user)
+):
     """Cancelar suscripción a un fondo"""
     try:
+        # Verificar autorización: el usuario solo puede cancelar sus propias suscripciones
+        if cancellation.user_id != current_user:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to cancel subscription for this user"
+            )
+        
         # Verificar suscripción activa
         subscription_response = user_funds_table.get_item(
             Key={
@@ -486,9 +685,20 @@ def cancel_fund_subscription(cancellation: CancellationRequest):
 
 
 @app.get("/users/{user_id}/transactions")
-def get_user_transactions(user_id: str, limit: int = 20):
+def get_user_transactions(
+    user_id: str,
+    current_user: str = Depends(get_current_user),
+    limit: int = 20
+):
     """Obtener historial de transacciones de un usuario"""
     try:
+        # Verificar autorización: el usuario solo puede ver sus propias transacciones
+        if user_id != current_user:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to view transactions for this user"
+            )
+        
         response = transactions_table.query(
             KeyConditionExpression='user_id = :user_id',
             ExpressionAttributeValues={':user_id': user_id},
@@ -533,9 +743,19 @@ def get_user_transactions(user_id: str, limit: int = 20):
 
 
 @app.get("/users/{user_id}/subscriptions")
-def get_user_subscriptions(user_id: str):
+def get_user_subscriptions(
+    user_id: str,
+    current_user: str = Depends(get_current_user)
+):
     """Obtener suscripciones activas de un usuario"""
     try:
+        # Verificar autorización: el usuario solo puede ver sus propias suscripciones
+        if user_id != current_user:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to view subscriptions for this user"
+            )
+        
         response = user_funds_table.query(
             KeyConditionExpression='user_id = :user_id',
             FilterExpression='#status = :status',

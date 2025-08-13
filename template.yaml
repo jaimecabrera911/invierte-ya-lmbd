@@ -230,6 +230,9 @@ Resources:
           TRANSACTIONS_TABLE_NAME: !Ref TransactionsTable
           NOTIFICATIONS_TABLE_NAME: !Ref NotificationsTable
           REGION: !Ref AWS::Region
+          JWT_SECRET_KEY: your-secret-key-change-in-production
+          JWT_ALGORITHM: HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES: '30'
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable

@@ -33,6 +33,8 @@ servers:
 tags:
   - name: Health
     description: Endpoints de salud y estado del sistema
+  - name: Authentication
+    description: Autenticación y autorización de usuarios
   - name: Users
     description: Gestión de usuarios
   - name: Funds
@@ -134,6 +136,107 @@ paths:
                     services:
                       dynamodb: "connected"
                       lambda: "running"
+
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Registrar nuevo usuario
+      description: Registra un nuevo usuario en el sistema y retorna un token de acceso JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+            examples:
+              usuario_nuevo:
+                summary: Registro de usuario nuevo
+                value:
+                  user_id: "user123"
+                  email: "usuario@ejemplo.com"
+                  phone: "+573001234567"
+                  password: "password123"
+                  notification_preference: "EMAIL"
+      responses:
+        '200':
+          description: Usuario registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+              examples:
+                registro_exitoso:
+                  summary: Registro exitoso
+                  value:
+                    access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    token_type: "bearer"
+        '409':
+          description: Usuario ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                usuario_existente:
+                  summary: Usuario ya registrado
+                  value:
+                    detail: "User already exists"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Iniciar sesión
+      description: Autentica un usuario y retorna un token de acceso JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+            examples:
+              credenciales_validas:
+                summary: Credenciales válidas
+                value:
+                  user_id: "user123"
+                  password: "password123"
+      responses:
+        '200':
+          description: Autenticación exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+              examples:
+                login_exitoso:
+                  summary: Login exitoso
+                  value:
+                    access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    token_type: "bearer"
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                credenciales_invalidas:
+                  summary: Credenciales incorrectas
+                  value:
+                    detail: "Invalid credentials"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /users:
     post:
@@ -710,6 +813,7 @@ components:
         - user_id
         - email
         - phone
+        - password
       properties:
         user_id:
           type: string
@@ -728,6 +832,12 @@ components:
           description: Número de teléfono del usuario (formato internacional)
           example: "+573001234567"
           pattern: '^\+[1-9]\d{1,14}$'
+        password:
+          type: string
+          format: password
+          description: Contraseña del usuario
+          example: "password123"
+          minLength: 6
         notification_preference:
           $ref: '#/components/schemas/NotificationType'
 
@@ -969,6 +1079,42 @@ components:
           description: Fecha y hora del error
           example: "2025-01-13T14:30:00Z"
 
+    UserLogin:
+      type: object
+      required:
+        - user_id
+        - password
+      properties:
+        user_id:
+          type: string
+          description: ID único del usuario
+          example: "juan_perez_123"
+        password:
+          type: string
+          format: password
+          description: Contraseña del usuario
+          example: "password123"
+
+    Token:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: Token JWT de acceso
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          description: Tipo de token
+          example: "bearer"
+
+    TokenData:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: ID del usuario extraído del token
+          example: "juan_perez_123"
+
   examples:
     UsuarioEjemplo:
       summary: Usuario de ejemplo
@@ -1005,15 +1151,20 @@ components:
         balance_after: 350000
 
   securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido del endpoint de login
     ApiKeyAuth:
       type: apiKey
       in: header
       name: X-API-Key
       description: API Key para autenticación (futuro)
 
-# Configuración global de seguridad (comentada para desarrollo)
-# security:
-#   - ApiKeyAuth: []
+# Configuración global de seguridad
+security:
+  - BearerAuth: []
 
 # Información adicional
 externalDocs:

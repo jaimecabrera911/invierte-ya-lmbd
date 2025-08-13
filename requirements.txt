@@ -1,3 +1,7 @@
 fastapi
 mangum
 boto3
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+python-dotenv

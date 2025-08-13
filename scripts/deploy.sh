@@ -24,16 +24,12 @@ cleanup() {
 # Configurar trap para limpiar en caso de error
 trap cleanup EXIT
 
-echo "📦 Copiando dependencias..."
-# Copiar dependencias al directorio raíz para el empaquetado
-cp -r dependencies/* .
-
 echo "🔨 Construyendo y desplegando..."
 # Desplegar usando SAM
 if [ "$1" = "guided" ]; then
     sam deploy --guided
 else
-    ENVIRONMENT=${1:-dev}
+    ENVIRONMENT=${1:-default}
     sam deploy --config-env $ENVIRONMENT
 fi
 
