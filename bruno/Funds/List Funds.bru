@@ -1,0 +1,45 @@
+meta {
+  name: List Funds
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/funds
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Response is an array", function () {
+    const responseJson = res.getBody();
+    expect(responseJson).to.be.an('array');
+  });
+}
+
+docs {
+  # Listar Fondos Disponibles
+  
+  Obtener lista de todos los fondos de inversión disponibles.
+  
+  ## Respuesta esperada (200):
+  ```json
+  [
+    {
+      "fund_id": "string",
+      "name": "string",
+      "minimum_amount": 0,
+      "category": "FPV" | "FIC",
+      "is_active": true
+    }
+  ]
+  ```
+  
+  ## Categorías de fondos:
+  - **FPV**: Fondo de Pensiones Voluntarias
+  - **FIC**: Fondo de Inversión Colectiva
+}

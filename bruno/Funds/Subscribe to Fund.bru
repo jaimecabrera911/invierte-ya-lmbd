@@ -1,0 +1,56 @@
+meta {
+  name: Subscribe to Fund
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/funds/subscribe
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "fund_id": "2",
+    "amount": 125000
+    
+  }
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  # Suscribirse a un Fondo
+  
+  Realizar una suscripción a un fondo de inversión.
+  
+  **Requiere autenticación:** Bearer Token
+  
+  ## Campos requeridos:
+  - `fund_id`: ID del fondo al que se desea suscribir
+  
+  ## Campos opcionales:
+  - `amount`: Monto a invertir (si no se especifica, usa el mínimo del fondo)
+  
+  ## Respuesta exitosa (200):
+  ```json
+  {
+    "message": "Suscripción exitosa",
+    "transaction_id": "string"
+  }
+  ```
+  
+  ## Errores posibles:
+  - 400: Error en los datos o fondos insuficientes
+  - 401: Token de autenticación requerido
+  - 404: Usuario o fondo no encontrado
+}

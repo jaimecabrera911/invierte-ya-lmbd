@@ -1,0 +1,51 @@
+meta {
+  name: Cancel Subscription
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/funds/cancel
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "fund_id": "FPV001"
+  }
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  # Cancelar Suscripción a un Fondo
+  
+  Cancelar una suscripción activa a un fondo de inversión.
+  
+  **Requiere autenticación:** Bearer Token
+  
+  ## Campos requeridos:
+  - `fund_id`: ID del fondo cuya suscripción se desea cancelar
+  
+  ## Respuesta exitosa (200):
+  ```json
+  {
+    "message": "Cancelación exitosa",
+    "transaction_id": "string"
+  }
+  ```
+  
+  ## Errores posibles:
+  - 400: Error en la cancelación
+  - 401: Token de autenticación requerido
+  - 404: Suscripción no encontrada
+}

@@ -1,0 +1,59 @@
+meta {
+  name: Get User Transactions
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/users/me/transactions?limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+params:query {
+  limit: 20
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Response is an array", function () {
+    const responseJson = res.getBody();
+    expect(responseJson).to.be.an('array');
+  });
+}
+
+docs {
+  # Obtener Transacciones del Usuario
+  
+  Listar todas las transacciones del usuario autenticado.
+  
+  **Requiere autenticación:** Bearer Token
+  
+  ## Parámetros de consulta:
+  - `limit`: Número máximo de transacciones a retornar (default: 20)
+  
+  ## Respuesta esperada (200):
+  ```json
+  [
+    {
+      "transaction_id": "string",
+      "fund_id": "string",
+      "fund_name": "string",
+      "type": "SUBSCRIPTION" | "CANCELLATION",
+      "amount": 0,
+      "timestamp": "string",
+      "status": "COMPLETED" | "PENDING" | "FAILED"
+    }
+  ]
+  ```
+  
+  ## Errores posibles:
+  - 401: Token de autenticación requerido
+}

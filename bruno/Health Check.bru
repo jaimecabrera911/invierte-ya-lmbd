@@ -1,0 +1,26 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/health
+  body: none
+  auth: none
+}
+
+docs {
+  # Health Check
+  
+  Verificar el estado de la API.
+  
+  ## Respuesta esperada:
+  ```json
+  {
+    "status": "string",
+    "timestamp": "string",
+    "environment": "string"
+  }
+  ```
+}

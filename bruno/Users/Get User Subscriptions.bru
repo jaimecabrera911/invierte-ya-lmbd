@@ -1,0 +1,51 @@
+meta {
+  name: Get User Subscriptions
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/users/me/subscriptions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Response is an array", function () {
+    const responseJson = res.getBody();
+    expect(responseJson).to.be.an('array');
+  });
+}
+
+docs {
+  # Obtener Suscripciones del Usuario
+  
+  Listar suscripciones activas del usuario autenticado.
+  
+  **Requiere autenticación:** Bearer Token
+  
+  ## Respuesta esperada (200):
+  ```json
+  [
+    {
+      "fund_id": "string",
+      "fund_name": "string",
+      "category": "FPV" | "FIC",
+      "amount_invested": 0,
+      "subscription_date": "string",
+      "is_active": true
+    }
+  ]
+  ```
+  
+  ## Errores posibles:
+  - 401: Token de autenticación requerido
+}

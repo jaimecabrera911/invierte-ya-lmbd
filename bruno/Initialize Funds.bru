@@ -1,0 +1,43 @@
+meta {
+  name: Initialize Funds
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/init-funds
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  # Inicializar Fondos de Prueba
+  
+  Crear fondos de ejemplo para testing (solo desarrollo).
+  
+  Este endpoint crea fondos predefinidos en la base de datos para facilitar las pruebas.
+  
+  ## Respuesta esperada (200):
+  ```json
+  {
+    "message": "Fondos inicializados exitosamente",
+    "funds_created": [
+      {
+        "fund_id": "string",
+        "name": "string",
+        "category": "FPV" | "FIC",
+        "minimum_amount": 0
+      }
+    ]
+  }
+  ```
+  
+  ## Nota:
+  Este endpoint es útil para configurar datos de prueba en entornos de desarrollo.
+}

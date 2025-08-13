@@ -1,0 +1,26 @@
+meta {
+  name: API Info
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/
+  body: none
+  auth: none
+}
+
+docs {
+  # API Info
+  
+  Endpoint raíz que proporciona información básica de la API.
+  
+  ## Respuesta esperada:
+  ```json
+  {
+    "message": "string",
+    "version": "string",
+    "environment": "string"
+  }
+  ```
+}

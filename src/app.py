@@ -55,6 +55,7 @@ class FundCategory(str, Enum):
 class TransactionType(str, Enum):
     SUBSCRIPTION = "subscription"
     CANCELLATION = "cancellation"
+    DEPOSIT = "deposit"
 
 
 class NotificationType(str, Enum):
@@ -143,6 +144,10 @@ class SubscriptionRequest(BaseModel):
 
 class CancellationRequest(BaseModel):
     fund_id: str
+
+
+class DepositRequest(BaseModel):
+    amount: Decimal
 
 
 # Funciones de utilidad para autenticación
@@ -538,7 +543,7 @@ def subscribe_to_fund(
         
         notification_item = {
             'notification_id': notification_id,
-            'user_id': subscription.user_id,
+            'user_id': current_user,
             'transaction_id': transaction_id,
             'type': user['notification_preference'],
             'status': 'pending',
@@ -779,6 +784,107 @@ def get_user_subscriptions(
         raise HTTPException(
             status_code=500,
             detail=f"Error al obtener suscripciones: {str(e)}"
+        )
+
+
+@app.post("/users/me/deposit")
+def deposit_money(
+    deposit: DepositRequest,
+    current_user: str = Depends(get_current_user)
+):
+    """Depositar dinero en la cuenta del usuario"""
+    try:
+        # Validar que el monto sea positivo
+        if deposit.amount <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="El monto del depósito debe ser mayor a cero"
+            )
+        
+        # Validar monto mínimo de depósito (ej: $10,000 COP)
+        min_deposit = Decimal('10000')
+        if deposit.amount < min_deposit:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El monto mínimo de depósito es COP ${min_deposit:,.0f}"
+            )
+        
+        # Validar monto máximo de depósito (ej: $10,000,000 COP)
+        max_deposit = Decimal('10000000')
+        if deposit.amount > max_deposit:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El monto máximo de depósito es COP ${max_deposit:,.0f}"
+            )
+        
+        # Obtener información actual del usuario
+        user_response = users_table.get_item(Key={'user_id': current_user})
+        if 'Item' not in user_response:
+            raise HTTPException(
+                status_code=404,
+                detail="Usuario no encontrado"
+            )
+        
+        user = user_response['Item']
+        current_balance = Decimal(str(user['balance']))
+        new_balance = current_balance + deposit.amount
+        
+        # Crear ID de transacción
+        transaction_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        
+        # Actualizar balance del usuario
+        users_table.update_item(
+            Key={'user_id': current_user},
+            UpdateExpression='SET balance = :new_balance, updated_at = :timestamp',
+            ExpressionAttributeValues={
+                ':new_balance': new_balance,
+                ':timestamp': timestamp
+            }
+        )
+        
+        # Registrar transacción de depósito
+        transaction_data = {
+            'user_id': current_user,
+            'transaction_id': transaction_id,
+            'fund_id': 'DEPOSIT',  # Identificador especial para depósitos
+            'transaction_type': TransactionType.DEPOSIT.value,
+            'amount': deposit.amount,
+            'timestamp': timestamp,
+            'status': TransactionStatus.COMPLETED.value,
+            'balance_before': current_balance,
+            'balance_after': new_balance
+        }
+        
+        transactions_table.put_item(Item=transaction_data)
+        
+        # Crear notificación
+        notification_data = {
+            'user_id': current_user,
+            'notification_id': str(uuid.uuid4()),
+            'type': 'deposit_confirmation',
+            'message': f'Depósito exitoso de COP ${deposit.amount:,.0f}. Nuevo balance: COP ${new_balance:,.0f}',
+            'timestamp': timestamp,
+            'sent': False
+        }
+        
+        notifications_table.put_item(Item=notification_data)
+        
+        return {
+            'message': 'Depósito realizado exitosamente',
+            'transaction_id': transaction_id,
+            'amount_deposited': float(deposit.amount),
+            'previous_balance': float(current_balance),
+            'new_balance': float(new_balance),
+            'timestamp': timestamp
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al procesar depósito: {str(e)}"
         )
 
 

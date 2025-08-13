@@ -1,0 +1,60 @@
+meta {
+  name: Register
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "usuario@ejemplo.com",
+    "phone": "+573001234567",
+    "password": "password123",
+    "notification_preference": "email"
+  }
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Response has access_token", function () {
+    const responseJson = res.getBody();
+    expect(responseJson).to.have.property('access_token');
+    
+    // Guardar el token para usar en otras requests
+    bru.setEnvVar('authToken', responseJson.access_token);
+  });
+}
+
+docs {
+  # Registrar Usuario
+  
+  Crear una nueva cuenta de usuario en el sistema.
+  
+  ## Campos requeridos:
+  - `email`: Correo electrónico (usado para autenticación)
+  - `phone`: Número de teléfono
+  - `password`: Contraseña
+  
+  ## Campos opcionales:
+  - `notification_preference`: "EMAIL" o "SMS" (default: "EMAIL")
+  
+  ## Respuesta exitosa (200):
+  ```json
+  {
+    "access_token": "jwt_token_here",
+    "token_type": "bearer"
+  }
+  ```
+  
+  ## Errores posibles:
+  - 400: Error en los datos de entrada
+  - 409: Usuario ya existe
+}

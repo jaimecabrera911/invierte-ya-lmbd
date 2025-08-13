@@ -1,0 +1,51 @@
+meta {
+  name: Get User Info
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/users/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Response has user data", function () {
+    const responseJson = res.getBody();
+    expect(responseJson).to.have.property('email');
+    expect(responseJson).to.have.property('phone');
+  });
+}
+
+docs {
+  # Obtener Información del Usuario
+  
+  Obtener detalles del usuario autenticado mediante token JWT.
+  
+  **Requiere autenticación:** Bearer Token
+  
+  ## Respuesta esperada (200):
+  ```json
+  {
+    "user_id": "string",
+    "email": "string",
+    "phone": "string",
+    "notification_preference": "EMAIL" | "SMS",
+    "created_at": "string",
+    "balance": 0
+  }
+  ```
+  
+  ## Errores posibles:
+  - 401: Token de autenticación requerido
+  - 404: Usuario no encontrado
+}

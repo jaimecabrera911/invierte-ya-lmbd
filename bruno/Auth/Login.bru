@@ -1,0 +1,53 @@
+meta {
+  name: Login
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "usuario@ejemplo.com",
+    "password": "password123"
+  }
+}
+
+tests {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Response has access_token", function () {
+    const responseJson = res.getBody();
+    expect(responseJson).to.have.property('access_token');
+    
+    // Guardar el token para usar en otras requests
+    bru.setEnvVar('authToken', responseJson.access_token);
+  });
+}
+
+docs {
+  # Iniciar Sesión
+  
+  Autenticar usuario y obtener token JWT.
+  
+  ## Campos requeridos:
+  - `email`: Correo electrónico del usuario
+  - `password`: Contraseña del usuario
+  
+  ## Respuesta exitosa (200):
+  ```json
+  {
+    "access_token": "jwt_token_here",
+    "token_type": "bearer"
+  }
+  ```
+  
+  ## Errores posibles:
+  - 401: Credenciales inválidas
+}

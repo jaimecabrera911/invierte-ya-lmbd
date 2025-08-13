@@ -1,0 +1,94 @@
+meta {
+  name: Deposit Money
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/users/me/deposit
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "amount": 100000
+  }
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Response contains deposit confirmation", function() {
+    const data = res.getBody();
+    expect(data).to.have.property('message');
+    expect(data).to.have.property('transaction_id');
+    expect(data).to.have.property('amount_deposited');
+    expect(data).to.have.property('previous_balance');
+    expect(data).to.have.property('new_balance');
+    expect(data).to.have.property('timestamp');
+  });
+  
+  test("Deposit amount is correct", function() {
+    const data = res.getBody();
+    expect(data.amount_deposited).to.equal(100000);
+  });
+  
+  test("New balance is greater than previous balance", function() {
+    const data = res.getBody();
+    expect(data.new_balance).to.be.greaterThan(data.previous_balance);
+  });
+}
+
+docs {
+  # Deposit Money
+  
+  This endpoint allows authenticated users to deposit money into their account for investment purposes.
+  
+  ## Request Body
+  
+  - `amount` (number, required): The amount to deposit in COP (Colombian Pesos)
+    - Minimum: 10,000 COP
+    - Maximum: 10,000,000 COP
+  
+  ## Response
+  
+  Returns a confirmation object with:
+  - `message`: Success message
+  - `transaction_id`: Unique identifier for the deposit transaction
+  - `amount_deposited`: The amount that was deposited
+  - `previous_balance`: User's balance before the deposit
+  - `new_balance`: User's balance after the deposit
+  - `timestamp`: When the deposit was processed
+  
+  ## Validation Rules
+  
+  - Amount must be positive
+  - Minimum deposit: 10,000 COP
+  - Maximum deposit: 10,000,000 COP
+  - User must be authenticated
+  
+  ## Example Usage
+  
+  1. First, authenticate using the Login endpoint to get an access token
+  2. Set the `access_token` environment variable
+  3. Execute this request to deposit money
+  4. Check your updated balance using the "Get User Profile" endpoint
+  
+  ## Transaction Recording
+  
+  - Creates a transaction record with type "DEPOSIT"
+  - Updates user's balance immediately
+  - Sends a confirmation notification
+  - All operations are atomic to ensure data consistency
+}
