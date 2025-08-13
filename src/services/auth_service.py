@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
 from typing import Optional
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials
+
 from ..config.settings import settings
 
 # Configuración de hash de contraseñas
@@ -34,7 +35,7 @@ class AuthService:
         return encoded_jwt
 
     @staticmethod
-    def get_current_user(credentials: HTTPAuthorizationCredentials) -> str:
+    def get_current_user(token: str) -> str:
         """Obtener usuario actual desde token JWT."""
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

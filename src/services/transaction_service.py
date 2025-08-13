@@ -1,10 +1,12 @@
-import boto3
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from fastapi import HTTPException, status
-from botocore.exceptions import ClientError
 from typing import Dict, Any, List
+
+import boto3
+from botocore.exceptions import ClientError
+from fastapi import HTTPException, status
+
 from ..config.settings import settings
 
 # Configuración de DynamoDB
@@ -26,7 +28,7 @@ class TransactionService:
         amount: Decimal,
         balance_before: Decimal,
         balance_after: Decimal,
-        status: str = "completed"
+        transaction_status: str = "completed"
     ) -> str:
         """Crear una nueva transacción."""
         transaction_id = str(uuid.uuid4())
@@ -39,7 +41,7 @@ class TransactionService:
             'transaction_type': transaction_type,
             'amount': amount,
             'timestamp': timestamp,
-            'status': status,
+            'status': transaction_status,
             'balance_before': balance_before,
             'balance_after': balance_after
         }

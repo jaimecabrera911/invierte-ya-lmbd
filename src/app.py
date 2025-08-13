@@ -1,7 +1,10 @@
 from datetime import timedelta, datetime
+from decimal import Decimal
+from typing import List
+
+import boto3
 from fastapi import FastAPI, HTTPException, Depends, status
 from mangum import Mangum
-from typing import List
 from dotenv import load_dotenv
 
 # Importar servicios
@@ -13,15 +16,22 @@ from .services.notification_service import NotificationService
 
 # Importar modelos
 from .models.schemas import (
-    UserCreate, UserLogin, Token, TokenData, User, Fund, FundSubscription,
-    Transaction, SubscriptionRequest, CancellationRequest, DepositRequest
+    UserCreate, UserLogin, Token, User, Fund,
+    SubscriptionRequest, CancellationRequest, DepositRequest
 )
-from .models.enums import FundCategory, TransactionType, NotificationType
+# Removed unused enum imports
 from .config.settings import settings
 from .utils.auth import get_current_user
 
 # Cargar variables de entorno
 load_dotenv()
+
+# Constantes
+INITIAL_BALANCE = Decimal('500000')  # Balance inicial de 500,000 COP
+
+# Configurar DynamoDB
+dynamodb = boto3.resource('dynamodb', region_name=settings.AWS_REGION)
+users_table = dynamodb.Table(settings.USERS_TABLE_NAME)
 
 app = FastAPI(
     title=settings.APP_TITLE,
@@ -322,20 +332,20 @@ def cancel_fund_subscription(
         # Devolver dinero al usuario
         new_balance = current_balance + invested_amount
         UserService.update_user_balance(
-            user_id=current_user,
+            email=current_user,
             new_balance=new_balance
         )
         
         # Cancelar suscripción
         FundService.cancel_user_subscription(
             user_id=current_user,
-            fund_id=cancellation.fund_id
+            fund_id=cancellation.fund_id,
+            transaction_id=transaction_id
         )
         
         # Registrar transacción
         TransactionService.create_transaction(
             user_id=current_user,
-            transaction_id=transaction_id,
             fund_id=cancellation.fund_id,
             transaction_type='cancellation',
             amount=invested_amount,
@@ -423,10 +433,15 @@ def deposit_money(
 ):
     """Depositar dinero en la cuenta del usuario"""
     try:
+        # Obtener balance actual del usuario
+        user = UserService.get_user_by_email(current_user)
+        current_balance = Decimal(str(user['balance']))
+        
         # Procesar depósito usando el servicio
         result = TransactionService.process_deposit(
             user_id=current_user,
-            amount=deposit.amount
+            amount=deposit.amount,
+            current_balance=current_balance
         )
         
         # Obtener información del usuario para la notificación
@@ -437,7 +452,6 @@ def deposit_money(
             user_id=current_user,
             transaction_id=result['transaction_id'],
             amount=deposit.amount,
-            new_balance=result['new_balance'],
             notification_type=user['notification_preference']
         )
         

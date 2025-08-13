@@ -1,9 +1,12 @@
-import boto3
-from datetime import datetime
 from decimal import Decimal
-from fastapi import HTTPException, status
-from botocore.exceptions import ClientError
+from datetime import datetime
 from typing import Dict, Any, List, Optional
+import uuid
+
+import boto3
+from botocore.exceptions import ClientError
+from fastapi import HTTPException, status
+
 from ..config.settings import settings
 
 # Configuración de DynamoDB
@@ -273,39 +276,7 @@ class FundService:
             return subscriptions
             
         except Exception as e:
-             raise Exception(f"Error al obtener suscripciones activas: {str(e)}")
-    
-    @staticmethod
-    def subscribe_user_to_fund(user_id: str, fund_id: str, amount: Decimal, transaction_id: str):
-        """Crear suscripción del usuario al fondo"""
-        try:
-            timestamp = datetime.utcnow().isoformat()
-            subscription_item = {
-                'user_id': user_id,
-                'fund_id': fund_id,
-                'invested_amount': amount,
-                'subscription_date': timestamp,
-                'status': 'active',
-                'transaction_id': transaction_id
-            }
-            user_funds_table.put_item(Item=subscription_item)
-            
-        except Exception as e:
-            raise Exception(f"Error al crear suscripción: {str(e)}")
-    
-    @staticmethod
-    def cancel_user_subscription(user_id: str, fund_id: str):
-        """Cancelar suscripción del usuario"""
-        try:
-            user_funds_table.update_item(
-                Key={
-                    'user_id': user_id,
-                    'fund_id': fund_id
-                },
-                UpdateExpression='SET #status = :status',
-                ExpressionAttributeNames={'#status': 'status'},
-                ExpressionAttributeValues={':status': 'cancelled'}
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al obtener suscripciones activas: {str(e)}"
             )
-            
-        except Exception as e:
-            raise Exception(f"Error al cancelar suscripción: {str(e)}")

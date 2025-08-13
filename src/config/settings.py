@@ -13,6 +13,9 @@ class Settings:
     JWT_ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 30
     
+    # Configuración de AWS
+    AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+    
     # Configuración de DynamoDB
     USERS_TABLE_NAME = os.environ.get('USERS_TABLE_NAME')
     FUNDS_TABLE_NAME = os.environ.get('FUNDS_TABLE_NAME')
