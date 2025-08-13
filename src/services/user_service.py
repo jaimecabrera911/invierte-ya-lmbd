@@ -1,4 +1,3 @@
-import os
 import boto3
 import uuid
 from datetime import datetime
@@ -6,13 +5,11 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from botocore.exceptions import ClientError
 from typing import Dict, Any
+from ..config.settings import settings
 
 # Configuración de DynamoDB
 dynamodb = boto3.resource('dynamodb')
-users_table = dynamodb.Table(os.environ.get('USERS_TABLE_NAME'))
-
-# Constantes
-INITIAL_BALANCE = Decimal('500000')  # COP $500.000
+users_table = dynamodb.Table(settings.USERS_TABLE_NAME)
 
 
 class UserService:
@@ -44,7 +41,7 @@ class UserService:
             'email': email,
             'phone': phone,
             'password_hash': hashed_password,
-            'balance': INITIAL_BALANCE,
+            'balance': settings.INITIAL_USER_BALANCE,
             'notification_preference': notification_preference,
             'created_at': timestamp,
             'updated_at': timestamp
@@ -54,7 +51,7 @@ class UserService:
             users_table.put_item(Item=user_item)
             return {
                 'user_id': email,
-                'balance': float(INITIAL_BALANCE),
+                'balance': float(settings.INITIAL_USER_BALANCE),
                 'email': email,
                 'phone': phone,
                 'notification_preference': notification_preference,

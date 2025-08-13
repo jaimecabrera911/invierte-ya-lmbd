@@ -1,16 +1,15 @@
-import os
 import boto3
-import uuid
 from datetime import datetime
 from decimal import Decimal
 from fastapi import HTTPException, status
 from botocore.exceptions import ClientError
 from typing import Dict, Any, List, Optional
+from ..config.settings import settings
 
 # Configuración de DynamoDB
 dynamodb = boto3.resource('dynamodb')
-funds_table = dynamodb.Table(os.environ.get('FUNDS_TABLE_NAME'))
-user_funds_table = dynamodb.Table(os.environ.get('USER_FUNDS_TABLE_NAME'))
+funds_table = dynamodb.Table(settings.FUNDS_TABLE_NAME)
+user_funds_table = dynamodb.Table(settings.USER_FUNDS_TABLE_NAME)
 
 
 class FundService:

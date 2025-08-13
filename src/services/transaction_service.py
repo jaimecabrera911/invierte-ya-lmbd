@@ -1,4 +1,3 @@
-import os
 import boto3
 import uuid
 from datetime import datetime
@@ -6,10 +5,11 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from botocore.exceptions import ClientError
 from typing import Dict, Any, List
+from ..config.settings import settings
 
 # Configuración de DynamoDB
 dynamodb = boto3.resource('dynamodb')
-transactions_table = dynamodb.Table(os.environ.get('TRANSACTIONS_TABLE_NAME'))
+transactions_table = dynamodb.Table(settings.TRANSACTIONS_TABLE_NAME)
 
 
 class TransactionService:
@@ -93,8 +93,8 @@ class TransactionService:
     ) -> Dict[str, Any]:
         """Procesar un depósito de dinero."""
         # Validaciones
-        min_deposit = Decimal('10000')  # COP $10,000
-        max_deposit = Decimal('10000000')  # COP $10,000,000
+        min_deposit = settings.MIN_DEPOSIT_AMOUNT
+        max_deposit = settings.MAX_DEPOSIT_AMOUNT
         
         if amount <= 0:
             raise HTTPException(

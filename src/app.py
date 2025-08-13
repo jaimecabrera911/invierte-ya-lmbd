@@ -1,12 +1,7 @@
-import os
-from datetime import timedelta
-from decimal import Decimal
+from datetime import timedelta, datetime
 from fastapi import FastAPI, HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from mangum import Mangum
-from pydantic import BaseModel
-from typing import Optional, List
-from enum import Enum
+from typing import List
 from dotenv import load_dotenv
 
 # Importar servicios
@@ -16,139 +11,34 @@ from .services.fund_service import FundService
 from .services.transaction_service import TransactionService
 from .services.notification_service import NotificationService
 
+# Importar modelos
+from .models.schemas import (
+    UserCreate, UserLogin, Token, TokenData, User, Fund, FundSubscription,
+    Transaction, SubscriptionRequest, CancellationRequest, DepositRequest
+)
+from .models.enums import FundCategory, TransactionType, NotificationType
+from .config.settings import settings
+from .utils.auth import get_current_user
+
 # Cargar variables de entorno
 load_dotenv()
 
 app = FastAPI(
-    title="Invierte Ya - Sistema de Fondos API",
-    version="1.0.0",
-    description="API para gestión de fondos de inversión FPV y FIC"
+    title=settings.APP_TITLE,
+    version=settings.APP_VERSION,
+    description=settings.APP_DESCRIPTION
 )
 
-# Configuración de autenticación
-security = HTTPBearer()
 
-
-class FundCategory(str, Enum):
-    FPV = "FPV"
-    FIC = "FIC"
-
-
-class TransactionType(str, Enum):
-    SUBSCRIPTION = "subscription"
-    CANCELLATION = "cancellation"
-    DEPOSIT = "deposit"
-
-
-class NotificationType(str, Enum):
-    EMAIL = "email"
-    SMS = "sms"
-
-
-class TransactionStatus(str, Enum):
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class SubscriptionStatus(str, Enum):
-    ACTIVE = "active"
-    CANCELLED = "cancelled"
-
-
-# Modelos Pydantic
-class UserCreate(BaseModel):
-    email: str
-    phone: str
-    password: str
-    notification_preference: NotificationType = (
-        NotificationType.EMAIL
-    )
-
-
-class UserLogin(BaseModel):
-    email: str
-    password: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    email: Optional[str] = None
-
-
-class User(BaseModel):
-    user_id: str
-    balance: Decimal
-    email: str
-    phone: str
-    notification_preference: NotificationType
-    created_at: str
-    updated_at: str
-
-
-class Fund(BaseModel):
-    fund_id: str
-    name: str
-    minimum_amount: Decimal
-    category: FundCategory
-    is_active: bool = True
-    created_at: str
-
-
-class FundSubscription(BaseModel):
-    user_id: str
-    fund_id: str
-    invested_amount: Decimal
-    subscription_date: str
-    status: SubscriptionStatus
-    transaction_id: str
-
-
-class Transaction(BaseModel):
-    user_id: str
-    transaction_id: str
-    fund_id: str
-    transaction_type: TransactionType
-    amount: Decimal
-    timestamp: str
-    status: TransactionStatus
-    balance_before: Decimal
-    balance_after: Decimal
-
-
-class SubscriptionRequest(BaseModel):
-    fund_id: str
-    amount: Optional[Decimal] = None  # Si no se especifica, usa el mínimo
-
-
-class CancellationRequest(BaseModel):
-    fund_id: str
-
-
-class DepositRequest(BaseModel):
-    amount: Decimal
-
-
-# Funciones de utilidad
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    return AuthService.get_current_user(credentials)
 
 
 @app.get("/")
 def read_root():
     return {
         "message": "Bienvenido a Invierte Ya - Sistema de Fondos",
-        "version": "1.0.0",
-        "environment": os.environ.get('ENVIRONMENT', 'unknown'),
-        "description": (
-            "API para gestión de Fondos Voluntarios de Pensión "
-            "(FPV) y Fondos de Inversión Colectiva (FIC)"
-        )
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+        "description": settings.APP_DESCRIPTION
     }
 
 
@@ -158,23 +48,13 @@ def health_check():
     health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "environment": os.environ.get('ENVIRONMENT', 'unknown'),
+        "environment": settings.ENVIRONMENT,
         "tables_configured": {
-            "users": (
-                os.environ.get('USERS_TABLE_NAME') is not None
-            ),
-            "funds": (
-                os.environ.get('FUNDS_TABLE_NAME') is not None
-            ),
-            "user_funds": (
-                os.environ.get('USER_FUNDS_TABLE_NAME') is not None
-            ),
-            "transactions": (
-                os.environ.get('TRANSACTIONS_TABLE_NAME') is not None
-            ),
-            "notifications": (
-                os.environ.get('NOTIFICATIONS_TABLE_NAME') is not None
-            )
+            "users": settings.USERS_TABLE_NAME is not None,
+            "funds": settings.FUNDS_TABLE_NAME is not None,
+            "user_funds": settings.USER_FUNDS_TABLE_NAME is not None,
+            "transactions": settings.TRANSACTIONS_TABLE_NAME is not None,
+            "notifications": settings.NOTIFICATIONS_TABLE_NAME is not None
         }
     }
     return health_status
@@ -196,7 +76,7 @@ def register_user(user_data: UserCreate):
         )
         
         # Crear token de acceso
-        access_token_expires = timedelta(minutes=30)
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = AuthService.create_access_token(
             data={"sub": user_data.email}, expires_delta=access_token_expires
         )
@@ -238,9 +118,9 @@ def login_user(user_credentials: UserLogin):
             )
         
         # Crear token de acceso
-        access_token_expires = timedelta(minutes=30)
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = AuthService.create_access_token(
-            data={"sub": user['email']}, expires_delta=access_token_expires
+            data={"sub": user.email}, expires_delta=access_token_expires
         )
         
         return {
