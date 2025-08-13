@@ -1,0 +1,49 @@
+{
+  "name": "invierte-ya-fondos",
+  "version": "1.0.0",
+  "description": "Sistema de gestión de fondos de inversión - API REST con FastAPI y AWS Lambda",
+  "structure": {
+    "src/": "Código fuente principal de la aplicación",
+    "tests/": "Pruebas unitarias y de integración",
+    "docs/": "Documentación del proyecto",
+    "scripts/": "Scripts de automatización y despliegue",
+    "dependencies/": "Dependencias Python organizadas (no incluir en git)"
+  },
+  "deployment": {
+    "platform": "AWS Lambda",
+    "framework": "SAM (Serverless Application Model)",
+    "environments": ["dev", "staging", "prod"],
+    "deploy_script": "./scripts/deploy.sh"
+  },
+  "dependencies": {
+    "runtime": "python3.9",
+    "main_packages": [
+      "fastapi",
+      "mangum",
+      "boto3",
+      "pydantic"
+    ],
+    "install_command": "pip install -r requirements.txt -t dependencies/ --platform linux_x86_64 --python-version 3.9 --only-binary=:all:"
+  },
+  "git": {
+    "ignore_patterns": [
+      "dependencies/",
+      ".aws-sam/",
+      "*.zip",
+      "__pycache__/",
+      "*.pyc",
+      "*.pyo",
+      ".env",
+      "samconfig.toml.bak"
+    ]
+  },
+  "api": {
+    "base_path": "/Prod",
+    "endpoints": {
+      "/": "Información general de la API",
+      "/health": "Estado de salud del servicio",
+      "/funds": "Gestión de fondos de inversión",
+      "/users": "Gestión de usuarios"
+    }
+  }
+}

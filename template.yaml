@@ -1,0 +1,339 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: |
+  invierte-ya-lmbd
+  CloudFormation template para desplegar una función Lambda con FastAPI
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Entorno de despliegue
+
+  ProjectName:
+    Type: String
+    Default: invierte-ya
+    Description: Nombre base del proyecto para las tablas de DynamoDB
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.12
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # Tabla de Usuarios
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${ProjectName}-users-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Tabla de Fondos
+  FundsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${ProjectName}-funds-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: fund_id
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+      KeySchema:
+        - AttributeName: fund_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: CategoryIndex
+          KeySchema:
+            - AttributeName: category
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Tabla de Suscripciones de Usuario a Fondos
+  UserFundsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${ProjectName}-user-funds-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: fund_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: subscription_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: fund_id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: subscription_date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: FundIndex
+          KeySchema:
+            - AttributeName: fund_id
+              KeyType: HASH
+            - AttributeName: subscription_date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Tabla de Transacciones
+  TransactionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${ProjectName}-transactions-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: transaction_id
+          AttributeType: S
+        - AttributeName: transaction_type
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: transaction_id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: TypeTimestampIndex
+          KeySchema:
+            - AttributeName: transaction_type
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Tabla de Notificaciones
+  NotificationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${ProjectName}-notifications-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: notification_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: notification_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIndex
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Función Lambda
+  InvierteYaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub invierte-ya-lambda-${Environment}
+      Description: Función Lambda para la aplicación Invierte Ya con FastAPI
+      CodeUri: ./
+      Handler: src.app.handler
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          USERS_TABLE_NAME: !Ref UsersTable
+          FUNDS_TABLE_NAME: !Ref FundsTable
+          USER_FUNDS_TABLE_NAME: !Ref UserFundsTable
+          TRANSACTIONS_TABLE_NAME: !Ref TransactionsTable
+          NOTIFICATIONS_TABLE_NAME: !Ref NotificationsTable
+          REGION: !Ref AWS::Region
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FundsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserFundsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TransactionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NotificationsTable
+      Events:
+        ApiGateway:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        RootPath:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+
+Outputs:
+  ApiGatewayUrl:
+    Description: URL del API Gateway para la función Invierte Ya
+    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiUrl
+
+  LambdaFunctionArn:
+    Description: ARN de la función Lambda Invierte Ya
+    Value: !GetAtt InvierteYaFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-LambdaArn
+
+  LambdaFunctionName:
+    Description: Nombre de la función Lambda
+    Value: !Ref InvierteYaFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-LambdaName
+
+  LambdaIamRole:
+    Description: Rol IAM creado para la función Lambda
+    Value: !GetAtt InvierteYaFunctionRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-LambdaRole
+
+  UsersTableName:
+    Description: Nombre de la tabla de Usuarios
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub ${AWS::StackName}-UsersTableName
+
+  FundsTableName:
+    Description: Nombre de la tabla de Fondos
+    Value: !Ref FundsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-FundsTableName
+
+  UserFundsTableName:
+    Description: Nombre de la tabla de Suscripciones Usuario-Fondos
+    Value: !Ref UserFundsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-UserFundsTableName
+
+  TransactionsTableName:
+    Description: Nombre de la tabla de Transacciones
+    Value: !Ref TransactionsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-TransactionsTableName
+
+  NotificationsTableName:
+    Description: Nombre de la tabla de Notificaciones
+    Value: !Ref NotificationsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-NotificationsTableName
+
+  UsersTableArn:
+    Description: ARN de la tabla de Usuarios
+    Value: !GetAtt UsersTable.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-UsersTableArn
+
+  FundsTableArn:
+    Description: ARN de la tabla de Fondos
+    Value: !GetAtt FundsTable.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-FundsTableArn
+
+  UserFundsTableArn:
+    Description: ARN de la tabla de Suscripciones Usuario-Fondos
+    Value: !GetAtt UserFundsTable.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-UserFundsTableArn
+
+  TransactionsTableArn:
+    Description: ARN de la tabla de Transacciones
+    Value: !GetAtt TransactionsTable.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-TransactionsTableArn
+
+  NotificationsTableArn:
+    Description: ARN de la tabla de Notificaciones
+    Value: !GetAtt NotificationsTable.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-NotificationsTableArn
