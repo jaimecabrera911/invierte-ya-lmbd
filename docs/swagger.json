@@ -26,16 +26,12 @@
     "schemas": {
       "UserCreate": {
         "type": "object",
-        "required": ["user_id", "email", "phone", "password"],
+        "required": ["email", "phone", "password"],
         "properties": {
-          "user_id": {
-            "type": "string",
-            "description": "Identificador único del usuario"
-          },
           "email": {
             "type": "string",
             "format": "email",
-            "description": "Correo electrónico del usuario"
+            "description": "Correo electrónico del usuario (usado para autenticación)"
           },
           "phone": {
             "type": "string",
@@ -47,19 +43,20 @@
           },
           "notification_preference": {
             "type": "string",
-            "enum": ["email", "sms"],
-            "default": "email",
+            "enum": ["EMAIL", "SMS"],
+            "default": "EMAIL",
             "description": "Preferencia de notificación"
           }
         }
       },
       "UserLogin": {
         "type": "object",
-        "required": ["user_id", "password"],
+        "required": ["email", "password"],
         "properties": {
-          "user_id": {
+          "email": {
             "type": "string",
-            "description": "Identificador del usuario"
+            "format": "email",
+            "description": "Correo electrónico del usuario"
           },
           "password": {
             "type": "string",
@@ -82,33 +79,25 @@
       },
       "SubscriptionRequest": {
         "type": "object",
-        "required": ["user_id", "fund_id"],
+        "required": ["fund_id"],
         "properties": {
-          "user_id": {
-            "type": "string",
-            "description": "ID del usuario"
-          },
           "fund_id": {
             "type": "string",
             "description": "ID del fondo"
           },
           "amount": {
             "type": "number",
-            "description": "Monto a invertir (opcional, usa el mínimo si no se especifica)"
+            "description": "Monto a invertir (opcional, usa mínimo del fondo si no se especifica)"
           }
         }
       },
       "CancellationRequest": {
         "type": "object",
-        "required": ["user_id", "fund_id"],
+        "required": ["fund_id"],
         "properties": {
-          "user_id": {
-            "type": "string",
-            "description": "ID del usuario"
-          },
           "fund_id": {
             "type": "string",
-            "description": "ID del fondo"
+            "description": "ID del fondo a cancelar"
           }
         }
       }
@@ -324,24 +313,13 @@
         }
       }
     },
-    "/users/{user_id}": {
+    "/users/me": {
       "get": {
-        "summary": "Obtener información del usuario",
-        "description": "Obtener detalles de un usuario específico",
+        "summary": "Obtener información del usuario autenticado",
+        "description": "Obtener detalles del usuario autenticado mediante token JWT",
         "security": [
           {
             "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "ID del usuario"
           }
         ],
         "responses": {
@@ -351,34 +329,22 @@
           "401": {
             "description": "Token de autenticación requerido"
           },
-          "403": {
-            "description": "Acceso denegado"
-          },
           "404": {
             "description": "Usuario no encontrado"
           }
         }
       }
     },
-    "/users/{user_id}/transactions": {
+    "/users/me/transactions": {
       "get": {
-        "summary": "Obtener transacciones del usuario",
-        "description": "Listar todas las transacciones de un usuario",
+        "summary": "Obtener transacciones del usuario autenticado",
+        "description": "Listar todas las transacciones del usuario autenticado",
         "security": [
           {
             "bearerAuth": []
           }
         ],
         "parameters": [
-          {
-            "name": "user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "ID del usuario"
-          },
           {
             "name": "limit",
             "in": "query",
@@ -396,42 +362,25 @@
           },
           "401": {
             "description": "Token de autenticación requerido"
-          },
-          "403": {
-            "description": "Acceso denegado"
           }
         }
       }
     },
-    "/users/{user_id}/subscriptions": {
+    "/users/me/subscriptions": {
       "get": {
-        "summary": "Obtener suscripciones del usuario",
-        "description": "Listar todas las suscripciones activas de un usuario",
+        "summary": "Obtener suscripciones del usuario autenticado",
+        "description": "Listar suscripciones activas del usuario autenticado",
         "security": [
           {
             "bearerAuth": []
           }
         ],
-        "parameters": [
-          {
-            "name": "user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "ID del usuario"
-          }
-        ],
         "responses": {
           "200": {
-            "description": "Lista de suscripciones"
+            "description": "Lista de suscripciones activas"
           },
           "401": {
             "description": "Token de autenticación requerido"
-          },
-          "403": {
-            "description": "Acceso denegado"
           }
         }
       }

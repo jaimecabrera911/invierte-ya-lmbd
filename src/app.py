@@ -74,7 +74,6 @@ class SubscriptionStatus(str, Enum):
 
 # Modelos Pydantic
 class UserCreate(BaseModel):
-    user_id: str
     email: str
     phone: str
     password: str
@@ -84,7 +83,7 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    user_id: str
+    email: str
     password: str
 
 
@@ -94,7 +93,7 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    user_id: Optional[str] = None
+    email: Optional[str] = None
 
 
 class User(BaseModel):
@@ -138,13 +137,11 @@ class Transaction(BaseModel):
 
 
 class SubscriptionRequest(BaseModel):
-    user_id: str
     fund_id: str
     amount: Optional[Decimal] = None  # Si no se especifica, usa el mínimo
 
 
 class CancellationRequest(BaseModel):
-    user_id: str
     fund_id: str
 
 
@@ -179,19 +176,22 @@ def get_current_user(
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
+        email: str = payload.get("sub")
+        if email is None:
             raise credentials_exception
-        token_data = TokenData(user_id=user_id)
+        token_data = TokenData(email=email)
     except JWTError:
         raise credentials_exception
     
     # Verificar que el usuario existe en la base de datos
     try:
-        response = users_table.get_item(Key={'user_id': token_data.user_id})
-        if 'Item' not in response:
+        response = users_table.scan(
+            FilterExpression='email = :email',
+            ExpressionAttributeValues={':email': token_data.email}
+        )
+        if not response['Items']:
             raise credentials_exception
-        return response['Item']['user_id']
+        return response['Items'][0]['user_id']
     except Exception:
         raise credentials_exception
 
@@ -241,13 +241,19 @@ def health_check():
 def register_user(user_data: UserCreate):
     """Registrar un nuevo usuario y retornar token de acceso"""
     try:
-        # Verificar si el usuario ya existe
-        response = users_table.get_item(Key={'user_id': user_data.user_id})
-        if 'Item' in response:
+        # Verificar si el usuario ya existe por email
+        response = users_table.scan(
+            FilterExpression='email = :email',
+            ExpressionAttributeValues={':email': user_data.email}
+        )
+        if response['Items']:
             raise HTTPException(
                 status_code=409,
                 detail="User already exists"
             )
+        
+        # Generar UID único para el usuario
+        user_id = str(uuid.uuid4())
         
         # Hash de la contraseña
         hashed_password = get_password_hash(user_data.password)
@@ -255,7 +261,7 @@ def register_user(user_data: UserCreate):
         # Crear usuario en la base de datos
         timestamp = datetime.utcnow().isoformat()
         user_item = {
-            'user_id': user_data.user_id,
+            'user_id': user_id,
             'balance': INITIAL_BALANCE,
             'email': user_data.email,
             'phone': user_data.phone,
@@ -267,10 +273,13 @@ def register_user(user_data: UserCreate):
         
         users_table.put_item(Item=user_item)
         
-        # Crear token de acceso
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        # Crear token de acceso usando el email
+        access_token_expires = timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
         access_token = create_access_token(
-            data={"sub": user_data.user_id}, expires_delta=access_token_expires
+            data={"sub": user_data.email}, 
+            expires_delta=access_token_expires
         )
         
         return {
@@ -291,27 +300,36 @@ def register_user(user_data: UserCreate):
 def login_user(user_credentials: UserLogin):
     """Autenticar usuario y retornar token de acceso"""
     try:
-        # Buscar usuario en la base de datos
-        response = users_table.get_item(Key={'user_id': user_credentials.user_id})
-        if 'Item' not in response:
+        # Buscar usuario por email en la base de datos
+        response = users_table.scan(
+            FilterExpression='email = :email',
+            ExpressionAttributeValues={':email': user_credentials.email}
+        )
+        if not response['Items']:
             raise HTTPException(
                 status_code=401,
                 detail="Invalid credentials"
             )
         
-        user = response['Item']
+        user = response['Items'][0]
         
         # Verificar contraseña
-        if not verify_password(user_credentials.password, user['password_hash']):
+        if not verify_password(
+            user_credentials.password, 
+            user['password_hash']
+        ):
             raise HTTPException(
                 status_code=401,
                 detail="Invalid credentials"
             )
         
-        # Crear token de acceso
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        # Crear token de acceso usando el email
+        access_token_expires = timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
         access_token = create_access_token(
-            data={"sub": user_credentials.user_id}, expires_delta=access_token_expires
+            data={"sub": user_credentials.email}, 
+            expires_delta=access_token_expires
         )
         
         return {
@@ -357,18 +375,11 @@ def create_user(user_data: UserCreate):
         )
 
 
-@app.get("/users/{user_id}", response_model=User)
-def get_user(user_id: str, current_user: str = Depends(get_current_user)):
-    """Obtener información de un usuario"""
+@app.get("/users/me", response_model=User)
+def get_user(current_user: str = Depends(get_current_user)):
+    """Obtener información del usuario autenticado"""
     try:
-        # Verificar autorización: el usuario solo puede ver su propia información
-        if user_id != current_user:
-            raise HTTPException(
-                status_code=403,
-                detail="Not authorized to view this user's information"
-            )
-        
-        response = users_table.get_item(Key={'user_id': user_id})
+        response = users_table.get_item(Key={'user_id': current_user})
         
         if 'Item' not in response:
             raise HTTPException(
@@ -413,16 +424,9 @@ def subscribe_to_fund(
 ):
     """Suscribirse a un fondo"""
     try:
-        # Verificar autorización: el usuario solo puede suscribirse a sí mismo
-        if subscription.user_id != current_user:
-            raise HTTPException(
-                status_code=403,
-                detail="Not authorized to subscribe for this user"
-            )
-        
-        # Obtener información del usuario
+        # Obtener información del usuario autenticado
         user_response = users_table.get_item(
-            Key={'user_id': subscription.user_id}
+            Key={'user_id': current_user}
         )
         if 'Item' not in user_response:
             raise HTTPException(
@@ -471,7 +475,7 @@ def subscribe_to_fund(
         # Verificar si ya está suscrito
         existing_subscription = user_funds_table.get_item(
             Key={
-                'user_id': subscription.user_id,
+                'user_id': current_user,
                 'fund_id': subscription.fund_id
             }
         )
@@ -490,8 +494,10 @@ def subscribe_to_fund(
         # Actualizar saldo del usuario
         new_balance = current_balance - investment_amount
         users_table.update_item(
-            Key={'user_id': subscription.user_id},
-            UpdateExpression='SET balance = :balance, updated_at = :updated_at',
+            Key={'user_id': current_user},
+            UpdateExpression=(
+                'SET balance = :balance, updated_at = :updated_at'
+            ),
             ExpressionAttributeValues={
                 ':balance': new_balance,
                 ':updated_at': timestamp
@@ -500,7 +506,7 @@ def subscribe_to_fund(
         
         # Crear suscripción
         subscription_item = {
-            'user_id': subscription.user_id,
+            'user_id': current_user,
             'fund_id': subscription.fund_id,
             'invested_amount': investment_amount,
             'subscription_date': timestamp,
@@ -511,7 +517,7 @@ def subscribe_to_fund(
         
         # Registrar transacción
         transaction_item = {
-            'user_id': subscription.user_id,
+            'user_id': current_user,
             'transaction_id': transaction_id,
             'fund_id': subscription.fund_id,
             'transaction_type': 'subscription',
@@ -566,17 +572,10 @@ def cancel_fund_subscription(
 ):
     """Cancelar suscripción a un fondo"""
     try:
-        # Verificar autorización: el usuario solo puede cancelar sus propias suscripciones
-        if cancellation.user_id != current_user:
-            raise HTTPException(
-                status_code=403,
-                detail="Not authorized to cancel subscription for this user"
-            )
-        
         # Verificar suscripción activa
         subscription_response = user_funds_table.get_item(
             Key={
-                'user_id': cancellation.user_id,
+                'user_id': current_user,
                 'fund_id': cancellation.fund_id
             }
         )
@@ -596,7 +595,7 @@ def cancel_fund_subscription(
         
         # Obtener información del usuario
         user_response = users_table.get_item(
-            Key={'user_id': cancellation.user_id}
+            Key={'user_id': current_user}
         )
         user = user_response['Item']
         current_balance = Decimal(str(user['balance']))
@@ -615,8 +614,10 @@ def cancel_fund_subscription(
         # Devolver dinero al usuario
         new_balance = current_balance + invested_amount
         users_table.update_item(
-            Key={'user_id': cancellation.user_id},
-            UpdateExpression='SET balance = :balance, updated_at = :updated_at',
+            Key={'user_id': current_user},
+            UpdateExpression=(
+                'SET balance = :balance, updated_at = :updated_at'
+            ),
             ExpressionAttributeValues={
                 ':balance': new_balance,
                 ':updated_at': timestamp
@@ -626,7 +627,7 @@ def cancel_fund_subscription(
         # Actualizar suscripción
         user_funds_table.update_item(
             Key={
-                'user_id': cancellation.user_id,
+                'user_id': current_user,
                 'fund_id': cancellation.fund_id
             },
             UpdateExpression='SET #status = :status',
@@ -636,7 +637,7 @@ def cancel_fund_subscription(
         
         # Registrar transacción
         transaction_item = {
-            'user_id': cancellation.user_id,
+            'user_id': current_user,
             'transaction_id': transaction_id,
             'fund_id': cancellation.fund_id,
             'transaction_type': 'cancellation',
@@ -657,7 +658,7 @@ def cancel_fund_subscription(
         
         notification_item = {
             'notification_id': notification_id,
-            'user_id': cancellation.user_id,
+            'user_id': current_user,
             'transaction_id': transaction_id,
             'type': user['notification_preference'],
             'status': 'pending',
@@ -684,24 +685,16 @@ def cancel_fund_subscription(
         )
 
 
-@app.get("/users/{user_id}/transactions")
+@app.get("/users/me/transactions")
 def get_user_transactions(
-    user_id: str,
     current_user: str = Depends(get_current_user),
     limit: int = 20
 ):
-    """Obtener historial de transacciones de un usuario"""
+    """Obtener historial de transacciones del usuario autenticado"""
     try:
-        # Verificar autorización: el usuario solo puede ver sus propias transacciones
-        if user_id != current_user:
-            raise HTTPException(
-                status_code=403,
-                detail="Not authorized to view transactions for this user"
-            )
-        
         response = transactions_table.query(
             KeyConditionExpression='user_id = :user_id',
-            ExpressionAttributeValues={':user_id': user_id},
+            ExpressionAttributeValues={':user_id': current_user},
             Limit=limit,
             ScanIndexForward=False  # Ordenar por fecha descendente
         )
@@ -730,7 +723,7 @@ def get_user_transactions(
             transactions.append(transaction)
         
         return {
-            "user_id": user_id,
+            "user_id": current_user,
             "transactions": transactions,
             "count": len(transactions)
         }
@@ -742,26 +735,18 @@ def get_user_transactions(
         )
 
 
-@app.get("/users/{user_id}/subscriptions")
+@app.get("/users/me/subscriptions")
 def get_user_subscriptions(
-    user_id: str,
     current_user: str = Depends(get_current_user)
 ):
-    """Obtener suscripciones activas de un usuario"""
+    """Obtener suscripciones activas del usuario autenticado"""
     try:
-        # Verificar autorización: el usuario solo puede ver sus propias suscripciones
-        if user_id != current_user:
-            raise HTTPException(
-                status_code=403,
-                detail="Not authorized to view subscriptions for this user"
-            )
-        
         response = user_funds_table.query(
             KeyConditionExpression='user_id = :user_id',
             FilterExpression='#status = :status',
             ExpressionAttributeNames={'#status': 'status'},
             ExpressionAttributeValues={
-                ':user_id': user_id,
+                ':user_id': current_user,
                 ':status': 'active'
             }
         )
@@ -785,7 +770,7 @@ def get_user_subscriptions(
             subscriptions.append(subscription)
         
         return {
-            "user_id": user_id,
+            "user_id": current_user,
             "active_subscriptions": subscriptions,
             "count": len(subscriptions)
         }
