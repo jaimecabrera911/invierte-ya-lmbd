@@ -1,0 +1,1021 @@
+openapi: 3.0.3
+info:
+  title: Invierte Ya - Sistema de Fondos API
+  description: |
+    API para gestión de fondos de inversión FPV (Fondos de Pensiones Voluntarias) y FIC (Fondos de Inversión Colectiva).
+    
+    Esta API permite:
+    - Gestión de usuarios y sus balances
+    - Consulta de fondos disponibles
+    - Suscripción y cancelación de fondos
+    - Historial de transacciones
+    - Sistema de notificaciones
+    
+    **Balance inicial:** Todos los usuarios inician con COP $500,000
+    
+    **Categorías de fondos:**
+    - **FPV:** Fondos de Pensiones Voluntarias
+    - **FIC:** Fondos de Inversión Colectiva
+  version: 1.0.0
+  contact:
+    name: Invierte Ya Support
+    email: support@invierteya.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://jwnazw2b41.execute-api.us-east-1.amazonaws.com/Prod
+    description: Servidor de producción
+  - url: http://localhost:3000
+    description: Servidor de desarrollo local
+
+tags:
+  - name: Health
+    description: Endpoints de salud y estado del sistema
+  - name: Users
+    description: Gestión de usuarios
+  - name: Funds
+    description: Gestión de fondos de inversión
+  - name: Subscriptions
+    description: Suscripciones y cancelaciones de fondos
+  - name: Transactions
+    description: Historial de transacciones
+  - name: Admin
+    description: Funciones administrativas
+
+paths:
+  /:
+    get:
+      tags:
+        - Health
+      summary: Endpoint raíz de la API
+      description: Retorna información básica sobre el estado de la API y las tablas configuradas
+      responses:
+        '200':
+          description: API funcionando correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "API funcionando correctamente"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-01-13T10:30:00Z"
+                  environment:
+                    type: string
+                    example: "production"
+                  tables_configured:
+                    type: object
+                    properties:
+                      users:
+                        type: boolean
+                      funds:
+                        type: boolean
+                      user_funds:
+                        type: boolean
+                      transactions:
+                        type: boolean
+                      notifications:
+                        type: boolean
+              examples:
+                respuesta_exitosa:
+                  summary: Respuesta exitosa del endpoint raíz
+                  value:
+                    message: "API funcionando correctamente"
+                    timestamp: "2025-01-13T15:30:45.123456"
+                    environment: "production"
+                    tables_configured:
+                      users: true
+                      funds: true
+                      user_funds: true
+                      transactions: true
+                      notifications: true
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Verificación de salud del sistema
+      description: Endpoint para verificar el estado de salud de la API y conectividad con DynamoDB
+      responses:
+        '200':
+          description: Sistema saludable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  services:
+                    type: object
+                    properties:
+                      dynamodb:
+                        type: string
+                        example: "connected"
+                      lambda:
+                        type: string
+                        example: "running"
+              examples:
+                sistema_saludable:
+                  summary: Sistema funcionando correctamente
+                  value:
+                    status: "healthy"
+                    timestamp: "2025-01-13T15:30:45.123456"
+                    services:
+                      dynamodb: "connected"
+                      lambda: "running"
+
+  /users:
+    post:
+      tags:
+        - Users
+      summary: Crear un nuevo usuario
+      description: Crea un nuevo usuario con balance inicial de COP $500,000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+            examples:
+              nuevo_usuario:
+                summary: Crear un nuevo usuario
+                value:
+                  user_id: "juan_perez_123"
+                  balance: 500000
+                  email: "juan.perez@email.com"
+                  phone: "+573001234567"
+                  notification_preference: "email"
+      responses:
+        '200':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              examples:
+                usuario_creado:
+                  summary: Usuario creado exitosamente
+                  value:
+                    user_id: "juan_perez_123"
+                    balance: 500000
+                    email: "juan.perez@email.com"
+                    phone: "+573001234567"
+                    notification_preference: "email"
+                    created_at: "2025-01-13T15:30:45.123456"
+                    updated_at: "2025-01-13T15:30:45.123456"
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                usuario_duplicado:
+                  summary: Usuario ya existe
+                  value:
+                    error: "User already exists"
+                    message: "El usuario con ID 'juan_perez_123' ya existe en el sistema"
+                    timestamp: "2025-01-13T15:30:45.123456"
+                datos_invalidos:
+                  summary: Datos de entrada inválidos
+                  value:
+                    error: "Invalid input data"
+                    message: "El email proporcionado no tiene un formato válido"
+                    timestamp: "2025-01-13T15:30:45.123456"
+        '409':
+          description: Usuario ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                error_servidor:
+                  summary: Error interno del sistema
+                  value:
+                    error: "Internal server error"
+                    message: "Error interno del servidor. Por favor, intente nuevamente más tarde"
+                    timestamp: "2025-01-13T15:30:45.123456"
+
+  /users/{user_id}:
+    get:
+      tags:
+        - Users
+      summary: Obtener información de un usuario
+      description: Retorna la información completa de un usuario incluyendo su balance actual
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: ID único del usuario
+          schema:
+            type: string
+          example: "juan_perez_123"
+      responses:
+        '200':
+          description: Información del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              examples:
+                usuario_existente:
+                  summary: Usuario con suscripciones activas
+                  value:
+                    user_id: "juan_perez_123"
+                    balance: 350000
+                    email: "juan.perez@email.com"
+                    phone: "+573001234567"
+                    notification_preference: "email"
+                    created_at: "2025-01-13T10:30:00.000000"
+                    updated_at: "2025-01-13T15:45:30.123456"
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                usuario_no_encontrado:
+                  summary: Usuario no existe
+                  value:
+                    error: "User not found"
+                    message: "El usuario con ID 'usuario_inexistente' no fue encontrado"
+                    timestamp: "2025-01-13T15:30:45.123456"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /funds:
+    get:
+      tags:
+        - Funds
+      summary: Listar todos los fondos disponibles
+      description: Retorna la lista de todos los fondos de inversión disponibles (FPV y FIC)
+      responses:
+        '200':
+          description: Lista de fondos disponibles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Fund'
+              examples:
+                fondos_disponibles:
+                  summary: Lista completa de fondos
+                  value:
+                    - fund_id: "1"
+                      name: "FPV_EL CLIENTE_RECAUDADORA"
+                      minimum_amount: 75000
+                      category: "FPV"
+                      is_active: true
+                      created_at: "2025-01-13T10:00:00.000000"
+                    - fund_id: "2"
+                      name: "FPV_EL CLIENTE_ECOPETROL"
+                      minimum_amount: 125000
+                      category: "FPV"
+                      is_active: true
+                      created_at: "2025-01-13T10:00:00.000000"
+                    - fund_id: "3"
+                      name: "DEUDAPRIVADA"
+                      minimum_amount: 50000
+                      category: "FIC"
+                      is_active: true
+                      created_at: "2025-01-13T10:00:00.000000"
+                    - fund_id: "4"
+                      name: "FDO-ACCIONES"
+                      minimum_amount: 250000
+                      category: "FIC"
+                      is_active: true
+                      created_at: "2025-01-13T10:00:00.000000"
+                    - fund_id: "5"
+                      name: "FPV_EL CLIENTE_DINAMICA"
+                      minimum_amount: 100000
+                      category: "FPV"
+                      is_active: true
+                      created_at: "2025-01-13T10:00:00.000000"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /funds/subscribe:
+    post:
+      tags:
+        - Subscriptions
+      summary: Suscribirse a un fondo
+      description: |
+        Permite a un usuario suscribirse a un fondo de inversión.
+        
+        **Validaciones:**
+        - El usuario debe existir
+        - El fondo debe estar activo
+        - El monto debe ser mayor o igual al mínimo requerido
+        - El usuario debe tener balance suficiente
+        - No puede estar ya suscrito al mismo fondo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+            examples:
+              suscripcion_fpv_ecopetrol:
+                summary: Suscripción a FPV EL CLIENTE ECOPETROL
+                value:
+                  user_id: "juan_perez_123"
+                  fund_id: "2"
+                  amount: 125000
+              suscripcion_deuda_privada:
+                summary: Suscripción a DEUDAPRIVADA
+                value:
+                  user_id: "maria_garcia_456"
+                  fund_id: "3"
+                  amount: 50000
+      responses:
+        '200':
+          description: Suscripción exitosa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Suscripción exitosa"
+                  transaction_id:
+                    type: string
+                    example: "txn_abc123def456"
+                  fund_name:
+                    type: string
+                    example: "FPV_EL CLIENTE_ECOPETROL"
+                  invested_amount:
+                    type: number
+                    example: 150000
+                  new_balance:
+                    type: number
+                    example: 350000
+                  notification_sent:
+                    type: boolean
+                    example: true
+              examples:
+                suscripcion_exitosa:
+                  summary: Suscripción realizada correctamente
+                  value:
+                    message: "Suscripción exitosa"
+                    transaction_id: "txn_sub_1705158645123"
+                    fund_name: "FPV_EL CLIENTE_ECOPETROL"
+                    invested_amount: 125000
+                    new_balance: 375000
+                    notification_sent: true
+        '400':
+          description: Datos inválidos o validación fallida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                monto_insuficiente:
+                  summary: Saldo insuficiente
+                  value:
+                    error: "Insufficient balance"
+                    message: "El saldo actual (50000) es insuficiente para la inversión solicitada (125000)"
+                    timestamp: "2025-01-13T15:30:45.123456"
+                monto_minimo:
+                  summary: Monto menor al mínimo requerido
+                  value:
+                    error: "Amount below minimum"
+                    message: "El monto mínimo para este fondo es 125000, se proporcionó 100000"
+                    timestamp: "2025-01-13T15:30:45.123456"
+                fondo_inactivo:
+                  summary: Fondo no disponible
+                  value:
+                    error: "Fund not available"
+                    message: "El fondo con ID '2' no está disponible para suscripciones"
+                    timestamp: "2025-01-13T15:30:45.123456"
+        '404':
+          description: Usuario o fondo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                usuario_no_encontrado_sub:
+                  summary: Usuario no encontrado para suscripción
+                  value:
+                    error: "User not found"
+                    message: "El usuario con ID 'usuario_inexistente' no fue encontrado"
+                    timestamp: "2025-01-13T15:30:45.123456"
+                fondo_no_encontrado:
+                  summary: Fondo no encontrado
+                  value:
+                    error: "Fund not found"
+                    message: "El fondo con ID '999' no fue encontrado"
+                    timestamp: "2025-01-13T15:30:45.123456"
+        '409':
+          description: Usuario ya suscrito al fondo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /funds/cancel:
+    post:
+      tags:
+        - Subscriptions
+      summary: Cancelar suscripción a un fondo
+      description: |
+        Permite a un usuario cancelar su suscripción a un fondo de inversión.
+        
+        **Proceso:**
+        - Se devuelve el monto invertido al balance del usuario
+        - Se marca la suscripción como cancelada
+        - Se registra la transacción de cancelación
+        - Se envía notificación al usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationRequest'
+            examples:
+              cancelar_suscripcion:
+                summary: Cancelar suscripción activa
+                value:
+                  user_id: "juan_perez_123"
+                  fund_id: "2"
+      responses:
+        '200':
+          description: Cancelación exitosa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Suscripción cancelada exitosamente"
+                  transaction_id:
+                    type: string
+                    example: "txn_cancel_xyz789"
+                  fund_name:
+                    type: string
+                    example: "FPV_EL CLIENTE_ECOPETROL"
+                  refunded_amount:
+                    type: number
+                    example: 150000
+                  new_balance:
+                    type: number
+                    example: 500000
+                  notification_sent:
+                    type: boolean
+                    example: true
+              examples:
+                cancelacion_exitosa:
+                  summary: Cancelación de suscripción exitosa
+                  value:
+                    message: "Suscripción cancelada exitosamente"
+                    transaction_id: "txn_cancel_1705158645123"
+                    fund_name: "FPV_EL CLIENTE_ECOPETROL"
+                    refunded_amount: 125000
+                    new_balance: 475000
+                    notification_sent: true
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                suscripcion_no_encontrada:
+                  summary: Suscripción no existe
+                  value:
+                    error: "Subscription not found"
+                    message: "No se encontró una suscripción activa para el usuario 'juan_perez_123' en el fondo '2'"
+                    timestamp: "2025-01-13T15:30:45.123456"
+        '404':
+          description: Usuario, fondo o suscripción no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{user_id}/transactions:
+    get:
+      tags:
+        - Transactions
+      summary: Obtener historial de transacciones de un usuario
+      description: Retorna el historial de transacciones de un usuario ordenado por fecha (más recientes primero)
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: ID único del usuario
+          schema:
+            type: string
+          example: "juan_perez_123"
+        - name: limit
+          in: query
+          required: false
+          description: Número máximo de transacciones a retornar
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 10
+      responses:
+        '200':
+          description: Historial de transacciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+              examples:
+                transacciones_usuario:
+                  summary: Historial de transacciones del usuario
+                  value:
+                    - user_id: "juan_perez_123"
+                      transaction_id: "txn_sub_1705158645123"
+                      fund_id: "2"
+                      transaction_type: "subscription"
+                      amount: 125000
+                      timestamp: "2025-01-13T15:30:45.123456"
+                      status: "completed"
+                      balance_before: 500000
+                      balance_after: 375000
+                    - user_id: "juan_perez_123"
+                      transaction_id: "txn_sub_1705158745456"
+                      fund_id: "1"
+                      transaction_type: "subscription"
+                      amount: 75000
+                      timestamp: "2025-01-13T16:15:30.456789"
+                      status: "completed"
+                      balance_before: 375000
+                      balance_after: 300000
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{user_id}/subscriptions:
+    get:
+      tags:
+        - Subscriptions
+      summary: Obtener suscripciones activas de un usuario
+      description: Retorna todas las suscripciones activas de un usuario
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: ID único del usuario
+          schema:
+            type: string
+          example: "juan_perez_123"
+      responses:
+        '200':
+          description: Lista de suscripciones activas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FundSubscription'
+              examples:
+                suscripciones_activas:
+                  summary: Suscripciones activas del usuario
+                  value:
+                    - user_id: "juan_perez_123"
+                      fund_id: "2"
+                      invested_amount: 125000
+                      subscription_date: "2025-01-13T15:30:45.123456"
+                      status: "active"
+                      transaction_id: "txn_sub_1705158645123"
+                    - user_id: "juan_perez_123"
+                      fund_id: "1"
+                      invested_amount: 75000
+                      subscription_date: "2025-01-13T16:15:30.456789"
+                      status: "active"
+                      transaction_id: "txn_sub_1705158745456"
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /init-funds:
+    post:
+      tags:
+        - Admin
+      summary: Inicializar fondos predefinidos
+      description: |
+        **⚠️ Endpoint administrativo para desarrollo**
+        
+        Inicializa los 5 fondos predefinidos en el sistema:
+        1. FPV_EL CLIENTE_RECAUDADORA (mín: $75,000)
+        2. FPV_EL CLIENTE_ECOPETROL (mín: $125,000)
+        3. DEUDAPRIVADA (mín: $50,000)
+        4. FDO-ACCIONES (mín: $250,000)
+        5. FPV_EL CLIENTE_DINAMICA (mín: $100,000)
+      responses:
+        '200':
+          description: Fondos inicializados exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Fondos inicializados exitosamente"
+                  funds_created:
+                    type: integer
+                    example: 5
+              examples:
+                inicializacion_exitosa:
+                  summary: Fondos inicializados correctamente
+                  value:
+                    message: "Fondos inicializados exitosamente"
+                    funds_created: 5
+        '500':
+          description: Error al inicializar fondos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                error_inicializacion:
+                  summary: Error al inicializar fondos
+                  value:
+                    error: "Initialization failed"
+                    message: "Error al inicializar los fondos en la base de datos"
+                    timestamp: "2025-01-13T15:30:45.123456"
+
+components:
+  schemas:
+    UserCreate:
+      type: object
+      required:
+        - user_id
+        - email
+        - phone
+      properties:
+        user_id:
+          type: string
+          description: Identificador único del usuario
+          example: "juan_perez_123"
+          pattern: '^[a-zA-Z0-9_-]+$'
+          minLength: 3
+          maxLength: 50
+        email:
+          type: string
+          format: email
+          description: Correo electrónico del usuario
+          example: "juan.perez@email.com"
+        phone:
+          type: string
+          description: Número de teléfono del usuario (formato internacional)
+          example: "+573001234567"
+          pattern: '^\+[1-9]\d{1,14}$'
+        notification_preference:
+          $ref: '#/components/schemas/NotificationType'
+
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: Identificador único del usuario
+          example: "juan_perez_123"
+        balance:
+          type: number
+          format: decimal
+          description: Balance actual del usuario en COP
+          example: 350000
+        email:
+          type: string
+          format: email
+          description: Correo electrónico del usuario
+          example: "juan.perez@email.com"
+        phone:
+          type: string
+          description: Número de teléfono del usuario
+          example: "+573001234567"
+        notification_preference:
+          $ref: '#/components/schemas/NotificationType'
+        created_at:
+          type: string
+          format: date-time
+          description: Fecha de creación del usuario
+          example: "2025-01-13T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Fecha de última actualización
+          example: "2025-01-13T15:45:00Z"
+
+    Fund:
+      type: object
+      properties:
+        fund_id:
+          type: string
+          description: Identificador único del fondo
+          example: "2"
+        name:
+          type: string
+          description: Nombre del fondo
+          example: "FPV_EL CLIENTE_ECOPETROL"
+        minimum_amount:
+          type: number
+          format: decimal
+          description: Monto mínimo de inversión en COP
+          example: 125000
+        category:
+          $ref: '#/components/schemas/FundCategory'
+        is_active:
+          type: boolean
+          description: Indica si el fondo está activo para nuevas suscripciones
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Fecha de creación del fondo
+          example: "2025-01-13T10:00:00Z"
+
+    FundSubscription:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: ID del usuario suscrito
+          example: "juan_perez_123"
+        fund_id:
+          type: string
+          description: ID del fondo
+          example: "2"
+        invested_amount:
+          type: number
+          format: decimal
+          description: Monto invertido en COP
+          example: 150000
+        subscription_date:
+          type: string
+          format: date-time
+          description: Fecha de suscripción
+          example: "2025-01-13T14:30:00Z"
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        transaction_id:
+          type: string
+          description: ID de la transacción asociada
+          example: "txn_abc123def456"
+
+    Transaction:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: ID del usuario
+          example: "juan_perez_123"
+        transaction_id:
+          type: string
+          description: Identificador único de la transacción
+          example: "txn_abc123def456"
+        fund_id:
+          type: string
+          description: ID del fondo involucrado
+          example: "2"
+        transaction_type:
+          $ref: '#/components/schemas/TransactionType'
+        amount:
+          type: number
+          format: decimal
+          description: Monto de la transacción en COP
+          example: 150000
+        timestamp:
+          type: string
+          format: date-time
+          description: Fecha y hora de la transacción
+          example: "2025-01-13T14:30:00Z"
+        status:
+          $ref: '#/components/schemas/TransactionStatus'
+        balance_before:
+          type: number
+          format: decimal
+          description: Balance antes de la transacción
+          example: 500000
+        balance_after:
+          type: number
+          format: decimal
+          description: Balance después de la transacción
+          example: 350000
+
+    SubscriptionRequest:
+      type: object
+      required:
+        - user_id
+        - fund_id
+      properties:
+        user_id:
+          type: string
+          description: ID del usuario que se suscribe
+          example: "juan_perez_123"
+        fund_id:
+          type: string
+          description: ID del fondo al que se suscribe
+          example: "2"
+        amount:
+          type: number
+          format: decimal
+          description: Monto a invertir (opcional, si no se especifica usa el mínimo)
+          example: 150000
+          minimum: 0
+
+    CancellationRequest:
+      type: object
+      required:
+        - user_id
+        - fund_id
+      properties:
+        user_id:
+          type: string
+          description: ID del usuario que cancela
+          example: "juan_perez_123"
+        fund_id:
+          type: string
+          description: ID del fondo a cancelar
+          example: "2"
+
+    FundCategory:
+      type: string
+      enum:
+        - FPV
+        - FIC
+      description: |
+        Categoría del fondo:
+        - **FPV**: Fondos de Pensiones Voluntarias
+        - **FIC**: Fondos de Inversión Colectiva
+      example: "FPV"
+
+    TransactionType:
+      type: string
+      enum:
+        - subscription
+        - cancellation
+      description: |
+        Tipo de transacción:
+        - **subscription**: Suscripción a un fondo
+        - **cancellation**: Cancelación de suscripción
+      example: "subscription"
+
+    NotificationType:
+      type: string
+      enum:
+        - email
+        - sms
+      description: |
+        Tipo de notificación preferida:
+        - **email**: Notificaciones por correo electrónico
+        - **sms**: Notificaciones por SMS
+      example: "email"
+
+    TransactionStatus:
+      type: string
+      enum:
+        - completed
+        - failed
+      description: |
+        Estado de la transacción:
+        - **completed**: Transacción completada exitosamente
+        - **failed**: Transacción falló
+      example: "completed"
+
+    SubscriptionStatus:
+      type: string
+      enum:
+        - active
+        - cancelled
+      description: |
+        Estado de la suscripción:
+        - **active**: Suscripción activa
+        - **cancelled**: Suscripción cancelada
+      example: "active"
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Descripción detallada del error
+          example: "Usuario no encontrado"
+        error_code:
+          type: string
+          description: Código de error específico
+          example: "USER_NOT_FOUND"
+        timestamp:
+          type: string
+          format: date-time
+          description: Fecha y hora del error
+          example: "2025-01-13T14:30:00Z"
+
+  examples:
+    UsuarioEjemplo:
+      summary: Usuario de ejemplo
+      value:
+        user_id: "juan_perez_123"
+        balance: 350000
+        email: "juan.perez@email.com"
+        phone: "+573001234567"
+        notification_preference: "email"
+        created_at: "2025-01-13T10:30:00Z"
+        updated_at: "2025-01-13T15:45:00Z"
+
+    FondoFPVEjemplo:
+      summary: Fondo FPV de ejemplo
+      value:
+        fund_id: "2"
+        name: "FPV_EL CLIENTE_ECOPETROL"
+        minimum_amount: 125000
+        category: "FPV"
+        is_active: true
+        created_at: "2025-01-13T10:00:00Z"
+
+    TransaccionEjemplo:
+      summary: Transacción de suscripción
+      value:
+        user_id: "juan_perez_123"
+        transaction_id: "txn_abc123def456"
+        fund_id: "2"
+        transaction_type: "subscription"
+        amount: 150000
+        timestamp: "2025-01-13T14:30:00Z"
+        status: "completed"
+        balance_before: 500000
+        balance_after: 350000
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API Key para autenticación (futuro)
+
+# Configuración global de seguridad (comentada para desarrollo)
+# security:
+#   - ApiKeyAuth: []
+
+# Información adicional
+externalDocs:
+  description: Documentación adicional del proyecto
+  url: https://github.com/invierte-ya/fondos-api
