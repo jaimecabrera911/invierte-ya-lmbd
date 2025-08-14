@@ -73,11 +73,11 @@ class TransactionService:
                     'transaction_id': item['transaction_id'],
                     'fund_id': item['fund_id'],
                     'transaction_type': item['transaction_type'],
-                    'amount': float(item['amount']),
+                    'amount': item['amount'],
                     'timestamp': item['timestamp'],
                     'status': item['status'],
-                    'balance_before': float(item['balance_before']),
-                    'balance_after': float(item['balance_after'])
+                    'balance_before': item['balance_before'],
+                    'balance_after': item['balance_after']
                 })
             
             return transactions

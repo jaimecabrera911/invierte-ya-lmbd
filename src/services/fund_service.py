@@ -26,7 +26,7 @@ class FundService:
                 funds.append({
                     'fund_id': item['fund_id'],
                     'name': item['name'],
-                    'minimum_amount': float(item['minimum_amount']),
+                    'minimum_amount': item['minimum_amount'],
                     'category': item['category'],
                     'is_active': item.get('is_active', True),
                     'created_at': item['created_at']
@@ -94,8 +94,8 @@ class FundService:
         """Obtener suscripción activa del usuario a un fondo."""
         try:
             response = user_funds_table.query(
-                KeyConditionExpression='user_id = :user_id',
-                FilterExpression='fund_id = :fund_id AND #status = :status',
+                KeyConditionExpression='user_id = :user_id AND fund_id = :fund_id',
+                FilterExpression='#status = :status',
                 ExpressionAttributeNames={'#status': 'status'},
                 ExpressionAttributeValues={
                     ':user_id': user_id,
@@ -131,7 +131,7 @@ class FundService:
             user_funds_table.update_item(
                 Key={
                     'user_id': user_id,
-                    'subscription_id': subscription['subscription_id']
+                    'fund_id': fund_id
                 },
                 UpdateExpression='SET #status = :status, cancellation_date = :date, cancellation_transaction_id = :transaction_id',
                 ExpressionAttributeNames={'#status': 'status'},
@@ -167,7 +167,7 @@ class FundService:
                     'user_id': item['user_id'],
                     'fund_id': item['fund_id'],
                     'fund_name': fund['name'],
-                    'invested_amount': float(item['invested_amount']),
+                    'invested_amount': item['invested_amount'],
                     'subscription_date': item['subscription_date'],
                     'status': item['status'],
                     'transaction_id': item['transaction_id']
@@ -267,7 +267,7 @@ class FundService:
                     "fund_id": item['fund_id'],
                     "fund_name": fund.get('name', 'Fondo no encontrado'),
                     "fund_category": fund.get('category', 'N/A'),
-                    "invested_amount": float(item['invested_amount']),
+                    "invested_amount": item['invested_amount'],
                     "subscription_date": item['subscription_date'],
                     "transaction_id": item['transaction_id']
                 }

@@ -4,6 +4,7 @@ from typing import List
 
 import boto3
 from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from dotenv import load_dotenv
 
@@ -37,6 +38,15 @@ app = FastAPI(
     title=settings.APP_TITLE,
     version=settings.APP_VERSION,
     description=settings.APP_DESCRIPTION
+)
+
+# Configurar CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -130,7 +140,7 @@ def login_user(user_credentials: UserLogin):
         # Crear token de acceso
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = AuthService.create_access_token(
-            data={"sub": user.email}, expires_delta=access_token_expires
+            data={"sub": user['email']}, expires_delta=access_token_expires
         )
         
         return {
@@ -279,8 +289,8 @@ def subscribe_to_fund(
             "message": "Suscripción exitosa",
             "transaction_id": transaction_id,
             "fund_name": fund['name'],
-            "invested_amount": float(investment_amount),
-            "new_balance": float(new_balance),
+            "invested_amount": investment_amount,
+            "new_balance": new_balance,
             "notification_sent": user['notification_preference']
         }
     
@@ -366,8 +376,8 @@ def cancel_fund_subscription(
             "message": "Cancelación exitosa",
             "transaction_id": transaction_id,
             "fund_name": fund['name'],
-            "returned_amount": float(invested_amount),
-            "new_balance": float(new_balance),
+            "returned_amount": invested_amount,
+            "new_balance": new_balance,
             "notification_sent": user['notification_preference']
         }
     
@@ -458,9 +468,9 @@ def deposit_money(
         return {
             'message': 'Depósito realizado exitosamente',
             'transaction_id': result['transaction_id'],
-            'amount_deposited': float(deposit.amount),
-            'previous_balance': float(result['previous_balance']),
-            'new_balance': float(result['new_balance']),
+            'amount_deposited': deposit.amount,
+            'previous_balance': result['previous_balance'],
+            'new_balance': result['new_balance'],
             'timestamp': result['timestamp']
         }
         

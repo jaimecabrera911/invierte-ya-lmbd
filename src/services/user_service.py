@@ -53,7 +53,7 @@ class UserService:
             users_table.put_item(Item=user_item)
             return {
                 'user_id': email,
-                'balance': float(settings.INITIAL_USER_BALANCE),
+                'balance': settings.INITIAL_USER_BALANCE,
                 'email': email,
                 'phone': phone,
                 'notification_preference': notification_preference,
@@ -80,7 +80,7 @@ class UserService:
             user = response['Item']
             return {
                 'user_id': user['user_id'],
-                'balance': float(user['balance']),
+                'balance': user['balance'],
                 'email': user['email'],
                 'phone': user['phone'],
                 'notification_preference': user['notification_preference'],
