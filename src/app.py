@@ -454,6 +454,10 @@ def deposit_money(
             current_balance=current_balance
         )
         
+        # Actualizar balance del usuario en la base de datos
+        new_balance = result['balance_after']
+        UserService.update_user_balance(current_user, new_balance)
+        
         # Obtener información del usuario para la notificación
         user = UserService.get_user_by_email(current_user)
         
@@ -469,8 +473,8 @@ def deposit_money(
             'message': 'Depósito realizado exitosamente',
             'transaction_id': result['transaction_id'],
             'amount_deposited': deposit.amount,
-            'previous_balance': result['previous_balance'],
-            'new_balance': result['new_balance'],
+            'previous_balance': result['balance_before'],
+            'new_balance': result['balance_after'],
             'timestamp': result['timestamp']
         }
         
